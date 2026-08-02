@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
+data/generated_*.jsonl
+data/*.manifest.json
+data/sec_raw/
+data/sec_company_map.json
+logs/
+outputs/
