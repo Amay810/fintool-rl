@@ -22,11 +22,10 @@ Frozen local artifact hashes:
 
 ## NSCC sequence
 
-1. Pull the reviewed commit and submit `qsub nscc/create_fintool_env.pbs`. Environment creation, large wheel
-   downloads, CUDA imports, and tests run only on the allocated compute node.
-2. After the environment job prints `ENVIRONMENT_READY`, run the CPU oracle smoke
-   (`qsub nscc/oracle_smoke.pbs`) and compare 126/126.
-3. Run the fair base-model baseline on the full RL pool's frozen dev split; archive SQLite, report, vLLM log,
+1. Pull the reviewed commit. The dedicated environment already exists; do not recreate or mutate it from the
+   login node.
+2. Run the CPU oracle smoke (`qsub nscc/oracle_smoke.pbs`) and compare 126/126.
+3. Run a 10-task fair base-model baseline smoke, then the full frozen dev split; archive SQLite, report, vLLM log,
    model revision, and PBS output.
 4. Train RS-SFT from `data/sft_train.jsonl`, selecting checkpoints only on `data/sft_dev.jsonl`. Fill the exact
    model revision and launcher commit in `configs/sft_qwen3_4b_lora.yaml` before submission.
@@ -39,8 +38,8 @@ Frozen local artifact hashes:
 ## Commands requiring NSCC GPU
 
 ```bash
-qsub nscc/create_fintool_env.pbs
-qsub -v MODEL=/models/Qwen3-4B-Instruct-2507,TAG=qwen3-4b-base,SPLIT=dev nscc/baseline.pbs
+qsub -v MODEL=/models/Qwen3-4B-Instruct-2507,TAG=qwen3-4b-base-smoke,SPLIT=dev,LIMIT=10 nscc/baseline.pbs
+qsub -v MODEL=/models/Qwen3-4B-Instruct-2507,TAG=qwen3-4b-base,SPLIT=dev,LIMIT=0 nscc/baseline.pbs
 qsub -v MODEL=/checkpoints/fintool-sft,POLICY_VERSION=sft-v1 nscc/headroom.pbs
 ```
 
