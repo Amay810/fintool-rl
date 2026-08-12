@@ -1,0 +1,16 @@
+#!/bin/bash
+#PBS -N fintool-oracle
+#PBS -q normal
+#PBS -P personal
+#PBS -l select=1:ncpus=16:ngpus=0:mem=16gb
+#PBS -l walltime=00:30:00
+#PBS -j oe
+
+set -euo pipefail
+cd "$PBS_O_WORKDIR"
+source .venv/bin/activate
+mkdir -p logs
+fintool-rl smoke \
+  --db data/sec_snapshot_15.sqlite \
+  --tasks data/long_graph_tasks.jsonl \
+  --store logs/long_graph_oracle_smoke.sqlite

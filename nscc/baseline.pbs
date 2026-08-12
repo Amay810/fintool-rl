@@ -1,0 +1,67 @@
+#!/bin/bash
+#PBS -N fintool-baseline
+#PBS -q normal
+#PBS -P personal
+#PBS -l select=1:ncpus=16:ngpus=4:mem=110gb
+#PBS -l walltime=12:00:00
+#PBS -j oe
+
+# Serves the policy model with vLLM on the compute node and runs the frozen baseline
+# against it inside the same job. The login node only submits this.
+#
+#   qsub -v MODEL=/path/to/Qwen3-4B-Instruct,SPLIT=dev,LIMIT=20 nscc/baseline.pbs
+#
+# MODEL   absolute path to the checkpoint (base or LoRA-merged)
+# SPLIT   train | dev | test | challenge      (default dev)
+# LIMIT   0 for the full split               (default 0)
+# TAG     label used in output filenames     (default basename of MODEL)
+
+set -euo pipefail
+
+cd "$PBS_O_WORKDIR"
+source .venv/bin/activate
+
+SPLIT="${SPLIT:-dev}"
+LIMIT="${LIMIT:-0}"
+TAG="${TAG:-$(basename "$MODEL")}"
+PORT=8123
+
+DB="${DB:-data/sec_snapshot_15.sqlite}"
+TASKS="${TASKS:-data/rl_task_pool.jsonl}"
+OUT="logs/${TAG}_${SPLIT}"
+mkdir -p logs
+
+vllm serve "$MODEL" \
+  --served-model-name "$TAG" \
+  --port "$PORT" \
+  --data-parallel-size 4 \
+  --tensor-parallel-size 1 \
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes \
+  --max-model-len 16384 \
+  > "logs/vllm_${TAG}.log" 2>&1 &
+VLLM_PID=$!
+trap 'kill $VLLM_PID 2>/dev/null || true' EXIT
+
+until curl -sf "http://127.0.0.1:${PORT}/v1/models" > /dev/null; do
+  sleep 10
+done
+
+export FINTOOL_LLM_BASE_URL="http://127.0.0.1:${PORT}/v1"
+export FINTOOL_LLM_MODEL="$TAG"
+export FINTOOL_LLM_API_KEY="EMPTY"
+export FINTOOL_LLM_TEMPERATURE="0.7"
+export FINTOOL_LLM_TOP_P="0.8"
+export FINTOOL_LLM_TOP_K="20"
+export FINTOOL_LLM_MIN_P="0"
+export FINTOOL_LLM_SEED="0"
+
+ARGS=(baseline
+  --db "$DB" --tasks "$TASKS" --split "$SPLIT"
+  --store "${OUT}.sqlite"
+  --report "${OUT}.report.json"
+  --failure-table "${OUT}.failures.jsonl"
+  --skip-existing --max-steps 10)
+[ "$LIMIT" -gt 0 ] && ARGS+=(--limit "$LIMIT")
+
+fintool-rl "${ARGS[@]}"

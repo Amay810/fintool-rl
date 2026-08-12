@@ -1,0 +1,31 @@
+experiment: drgrpo-core-v1
+optimizer_variant: DrGRPO
+reward: pure_binary_terminal
+group_size: 8
+rollout:
+  temperature: 0.7
+  top_p: 0.8
+  top_k: 20
+  min_p: 0.0
+primary_budget_axis: generated_rollout_tokens
+strata:
+  - depth_1
+  - depth_2_3
+  - depth_4_5
+  - depth_6_plus
+controller:
+  posterior: discounted_beta_or_preregistered_hierarchy
+  gamma_range: [0.90, 0.98]
+  acquisition: expected_drgrpo_advantage_mass_per_generated_token
+  coverage: minimum_generated_token_quota_per_stratum
+core_experiments:
+  - E1_uniform_drgrpo
+  - E3_static_band_drgrpo
+  - E4_post_generation_filter
+  - E5_online_curriculum
+  - E7_matched_additional_sft
+seeds: [11, 29, 47]
+blocked_until:
+  - M2.5_overall_go
+  - exact_rollout_token_and_loss_mask_identity
+  - one_update_memory_and_weight_sync_smoke

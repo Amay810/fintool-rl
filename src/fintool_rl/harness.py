@@ -144,6 +144,8 @@ class HarnessRunner:
         else:
             trajectory.terminal_reason = "max_steps"
         trajectory.tool_calls = list(tools.calls)
+        trajectory.generated_tokens = int(getattr(policy, "generated_tokens", 0))
+        trajectory.policy_version = str(getattr(policy, "policy_version", policy.name))
         return trajectory, grade_trajectory(task, trajectory)
 
 
@@ -198,6 +200,16 @@ class TrajectoryStore:
             conn.close()
         return {row[0] for row in rows}
 
+    def counts_by_task(self) -> dict[str, int]:
+        conn = sqlite3.connect(self.path)
+        try:
+            rows = conn.execute(
+                "SELECT task_id, COUNT(*) FROM trajectories GROUP BY task_id"
+            ).fetchall()
+        finally:
+            conn.close()
+        return {str(task_id): int(count) for task_id, count in rows}
+
     def rows(self) -> list[dict[str, Any]]:
         conn = sqlite3.connect(self.path)
         conn.row_factory = sqlite3.Row
@@ -222,6 +234,8 @@ class TrajectoryStore:
                 tool_calls=tool_calls,
                 final_answer=payload.get("final_answer"),
                 terminal_reason=payload.get("terminal_reason"),
+                generated_tokens=int(payload.get("generated_tokens", 0)),
+                policy_version=str(payload.get("policy_version", "")),
             )
             reward = RewardVectorType(**json.loads(row["reward_json"]))
             graded.append((trajectory, reward))

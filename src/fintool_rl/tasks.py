@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
+from itertools import pairwise
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from .contracts import TaskSpec
 from .database import connect
@@ -39,6 +41,7 @@ def _build_task(
     fact_keys: list[str],
     answer_tolerance: float = 1e-6,
     split: str | None = None,
+    graph_metadata: dict[str, Any] | None = None,
 ) -> TaskSpec:
     tools = FinancialTools(db_path)
     _, results = execute_oracle(tools, oracle_steps)
@@ -64,6 +67,11 @@ def _build_task(
             "symbol": symbol,
             "fact_keys": fact_keys,
             "generator": "synthetic_fixture_v1",
+            "graph_depth": len(oracle_steps),
+            "observation_reuse_count": 0,
+            "discovery_required": False,
+            "distractor_count": 0,
+            **(graph_metadata or {}),
         },
     )
 
@@ -306,7 +314,7 @@ def generate_snapshot_tasks(
                     required_tool_families=["financial_statement"],
                     fact_keys=[f"{symbol}:{metric}:{year}"],
                 ))
-            for previous_year, current_year in zip(years, years[1:]):
+            for previous_year, current_year in pairwise(years):
                 if current_year != previous_year + 1:
                     continue
                 if (symbol, metric, previous_year) in zero_values:
@@ -437,6 +445,361 @@ def generate_snapshot_tasks(
             ))
     for task in tasks:
         task.metadata["generator"] = "sec_snapshot_v1"
+    tasks.sort(key=lambda task: task.task_id)
+    assert_no_fact_leakage(tasks)
+    return tasks
+
+
+def generate_growth_of_growth_tasks(
+    db_path: Path | str,
+    company_splits: dict[str, str],
+    *,
+    split: str = "dev",
+    limit: int = 10,
+) -> list[TaskSpec]:
+    """Generate six-call probes that reuse calculator observations."""
+    if limit < 0:
+        raise ValueError(f"negative limit: {limit}")
+    conn = connect(db_path, read_only=True)
+    try:
+        as_of = conn.execute("SELECT value FROM metadata WHERE key='as_of_time'").fetchone()[0]
+        rows = conn.execute(
+            "SELECT symbol, metric, fiscal_year, value FROM financial_facts "
+            "WHERE metric IN ('revenue', 'net_income') ORDER BY symbol, metric, fiscal_year"
+        ).fetchall()
+    finally:
+        conn.close()
+    facts: dict[tuple[str, str], dict[int, float]] = {}
+    for row in rows:
+        symbol = str(row["symbol"]).upper()
+        if company_splits.get(symbol) != split:
+            continue
+        facts.setdefault((symbol, row["metric"]), {})[int(row["fiscal_year"])] = float(row["value"])
+
+    tasks: list[TaskSpec] = []
+    for (symbol, metric), by_year in sorted(facts.items()):
+        years = sorted(by_year)
+        for first, second, third in zip(years, years[1:], years[2:]):
+            if (second, third) != (first + 1, second + 1):
+                continue
+            if by_year[first] == 0 or by_year[second] == 0:
+                continue
+            steps = [
+                {
+                    "id": "first",
+                    "tool": "get_financial_fact",
+                    "arguments": {
+                        "symbol": symbol, "metric": metric, "fiscal_year": first, "as_of_time": as_of,
+                    },
+                },
+                {
+                    "id": "second",
+                    "tool": "get_financial_fact",
+                    "arguments": {
+                        "symbol": symbol, "metric": metric, "fiscal_year": second, "as_of_time": as_of,
+                    },
+                },
+                {
+                    "id": "third",
+                    "tool": "get_financial_fact",
+                    "arguments": {
+                        "symbol": symbol, "metric": metric, "fiscal_year": third, "as_of_time": as_of,
+                    },
+                },
+                {
+                    "id": "first_growth",
+                    "tool": "calculate_growth",
+                    "arguments": {
+                        "current_observation_id": "$second.observation_id",
+                        "previous_observation_id": "$first.observation_id",
+                    },
+                },
+                {
+                    "id": "second_growth",
+                    "tool": "calculate_growth",
+                    "arguments": {
+                        "current_observation_id": "$third.observation_id",
+                        "previous_observation_id": "$second.observation_id",
+                    },
+                },
+                {
+                    "id": "answer",
+                    "tool": "calculate_difference",
+                    "arguments": {
+                        "left_observation_id": "$second_growth.observation_id",
+                        "right_observation_id": "$first_growth.observation_id",
+                    },
+                },
+            ]
+            task = _build_task(
+                db_path,
+                symbol=symbol,
+                split=split,
+                question=(
+                    f"Using filings available by {as_of}, by how many percentage points did {symbol}'s "
+                    f"{metric} growth rate change from FY{first}-FY{second} to FY{second}-FY{third}?"
+                ),
+                as_of_time=as_of,
+                difficulty="compositional",
+                template_family="growth_of_growth",
+                oracle_steps=steps,
+                required_tool_families=["financial_statement", "calculator"],
+                fact_keys=[
+                    f"{symbol}:{metric}:{first}",
+                    f"{symbol}:{metric}:{second}",
+                    f"{symbol}:{metric}:{third}",
+                ],
+                answer_tolerance=1e-4,
+            )
+            task.metadata["generator"] = "headroom_probe_v1"
+            task.metadata["observation_reuse_count"] = 2
+            tasks.append(task)
+    tasks.sort(key=lambda task: task.task_id)
+    if len(tasks) < limit:
+        raise ValueError(f"only {len(tasks)} growth-of-growth tasks available for split {split}, need {limit}")
+    return tasks[:limit]
+
+
+def generate_long_graph_tasks(
+    db_path: Path | str,
+    company_splits: dict[str, str],
+    *,
+    recent_years: int = 3,
+) -> list[TaskSpec]:
+    """Generate the pre-registered 4–7 call graph families for all data splits."""
+    conn = connect(db_path, read_only=True)
+    try:
+        as_of = conn.execute("SELECT value FROM metadata WHERE key='as_of_time'").fetchone()[0]
+        rows = conn.execute(
+            "SELECT symbol, metric, fiscal_year, value FROM financial_facts "
+            "ORDER BY symbol, metric, fiscal_year"
+        ).fetchall()
+    finally:
+        conn.close()
+    facts: dict[str, dict[str, dict[int, float]]] = {}
+    for row in rows:
+        facts.setdefault(str(row["symbol"]).upper(), {}).setdefault(str(row["metric"]), {})[
+            int(row["fiscal_year"])
+        ] = float(row["value"])
+
+    tasks: list[TaskSpec] = []
+    for symbol, split in sorted(company_splits.items()):
+        symbol = symbol.upper()
+        metrics = facts.get(symbol, {})
+        if not metrics:
+            continue
+
+        for metric in ("revenue", "net_income"):
+            values = metrics.get(metric, {})
+            years = sorted(values)[-recent_years:]
+            for first, second, third in zip(years, years[1:], years[2:]):
+                if (second, third) != (first + 1, second + 1):
+                    continue
+                if values[first] == 0 or values[second] == 0:
+                    continue
+                steps = [
+                    {"id": "first", "tool": "get_financial_fact", "arguments": {
+                        "symbol": symbol, "metric": metric, "fiscal_year": first, "as_of_time": as_of}},
+                    {"id": "second", "tool": "get_financial_fact", "arguments": {
+                        "symbol": symbol, "metric": metric, "fiscal_year": second, "as_of_time": as_of}},
+                    {"id": "third", "tool": "get_financial_fact", "arguments": {
+                        "symbol": symbol, "metric": metric, "fiscal_year": third, "as_of_time": as_of}},
+                    {"id": "first_growth", "tool": "calculate_growth", "arguments": {
+                        "current_observation_id": "$second.observation_id",
+                        "previous_observation_id": "$first.observation_id"}},
+                    {"id": "second_growth", "tool": "calculate_growth", "arguments": {
+                        "current_observation_id": "$third.observation_id",
+                        "previous_observation_id": "$second.observation_id"}},
+                    {"id": "answer", "tool": "calculate_difference", "arguments": {
+                        "left_observation_id": "$second_growth.observation_id",
+                        "right_observation_id": "$first_growth.observation_id"}},
+                ]
+                tasks.append(_build_task(
+                    db_path, symbol=symbol, split=split, as_of_time=as_of,
+                    question=(f"By how many percentage points did {symbol}'s {metric} growth change "
+                              f"from FY{first}–FY{second} to FY{second}–FY{third}, using filings available by {as_of}?"),
+                    difficulty="compositional", template_family="growth_of_growth",
+                    oracle_steps=steps, required_tool_families=["financial_statement", "calculator"],
+                    fact_keys=[f"{symbol}:{metric}:{year}" for year in (first, second, third)],
+                    answer_tolerance=1e-4,
+                    graph_metadata={"observation_reuse_count": 2},
+                ))
+
+            if len(years) >= 2 and values[years[-2]] != 0:
+                previous, current = years[-2:]
+                discovery_steps = [
+                    {"id": "periods", "tool": "list_available_periods", "arguments": {
+                        "symbol": symbol, "metric": metric, "as_of_time": as_of}},
+                    {"id": "current", "tool": "get_financial_fact", "arguments": {
+                        "symbol": symbol, "metric": metric, "fiscal_year": current, "as_of_time": as_of}},
+                    {"id": "previous", "tool": "get_financial_fact", "arguments": {
+                        "symbol": symbol, "metric": metric, "fiscal_year": previous, "as_of_time": as_of}},
+                    {"id": "answer", "tool": "calculate_growth", "arguments": {
+                        "current_observation_id": "$current.observation_id",
+                        "previous_observation_id": "$previous.observation_id"}},
+                ]
+                tasks.append(_build_task(
+                    db_path, symbol=symbol, split=split, as_of_time=as_of,
+                    question=(f"Discover the two most recent fiscal years available by {as_of}, then calculate "
+                              f"{symbol}'s {metric} growth between them."),
+                    difficulty="compositional", template_family="latest_period_growth_discovery",
+                    oracle_steps=discovery_steps,
+                    required_tool_families=["financial_statement", "calculator"],
+                    fact_keys=[f"{symbol}:{metric}:{previous}", f"{symbol}:{metric}:{current}"],
+                    answer_tolerance=1e-4,
+                    graph_metadata={"discovery_required": True},
+                ))
+
+        common_margin = sorted(
+            set(metrics.get("gross_profit", {}))
+            & set(metrics.get("revenue", {}))
+            & set(metrics.get("net_income", {}))
+        )[-recent_years:]
+        for year in common_margin:
+            revenue = metrics["revenue"][year]
+            if revenue == 0:
+                continue
+            gap_steps = [
+                {"id": "gross_profit", "tool": "get_financial_fact", "arguments": {
+                    "symbol": symbol, "metric": "gross_profit", "fiscal_year": year, "as_of_time": as_of}},
+                {"id": "net_income", "tool": "get_financial_fact", "arguments": {
+                    "symbol": symbol, "metric": "net_income", "fiscal_year": year, "as_of_time": as_of}},
+                {"id": "revenue", "tool": "get_financial_fact", "arguments": {
+                    "symbol": symbol, "metric": "revenue", "fiscal_year": year, "as_of_time": as_of}},
+                {"id": "gross_margin", "tool": "calculate_margin", "arguments": {
+                    "profit_observation_id": "$gross_profit.observation_id",
+                    "revenue_observation_id": "$revenue.observation_id"}},
+                {"id": "net_margin", "tool": "calculate_margin", "arguments": {
+                    "profit_observation_id": "$net_income.observation_id",
+                    "revenue_observation_id": "$revenue.observation_id"}},
+                {"id": "answer", "tool": "calculate_difference", "arguments": {
+                    "left_observation_id": "$gross_margin.observation_id",
+                    "right_observation_id": "$net_margin.observation_id"}},
+            ]
+            tasks.append(_build_task(
+                db_path, symbol=symbol, split=split, as_of_time=as_of,
+                question=f"For FY{year}, how many percentage points higher was {symbol}'s gross margin than net margin?",
+                difficulty="compositional", template_family="gross_net_margin_gap",
+                oracle_steps=gap_steps, required_tool_families=["financial_statement", "calculator"],
+                fact_keys=[f"{symbol}:{metric}:{year}" for metric in ("gross_profit", "net_income", "revenue")],
+                answer_tolerance=1e-4,
+                graph_metadata={"observation_reuse_count": 1},
+            ))
+
+        for previous, current in pairwise(common_margin):
+            if current != previous + 1 or metrics["revenue"][previous] == 0 or metrics["revenue"][current] == 0:
+                continue
+            margin_steps = []
+            for prefix, year in (("previous", previous), ("current", current)):
+                margin_steps.extend([
+                    {"id": f"{prefix}_profit", "tool": "get_financial_fact", "arguments": {
+                        "symbol": symbol, "metric": "gross_profit", "fiscal_year": year, "as_of_time": as_of}},
+                    {"id": f"{prefix}_revenue", "tool": "get_financial_fact", "arguments": {
+                        "symbol": symbol, "metric": "revenue", "fiscal_year": year, "as_of_time": as_of}},
+                    {"id": f"{prefix}_margin", "tool": "calculate_margin", "arguments": {
+                        "profit_observation_id": f"${prefix}_profit.observation_id",
+                        "revenue_observation_id": f"${prefix}_revenue.observation_id"}},
+                ])
+            margin_steps.append({"id": "answer", "tool": "calculate_difference", "arguments": {
+                "left_observation_id": "$current_margin.observation_id",
+                "right_observation_id": "$previous_margin.observation_id"}})
+            tasks.append(_build_task(
+                db_path, symbol=symbol, split=split, as_of_time=as_of,
+                question=f"By how many percentage points did {symbol}'s gross margin change from FY{previous} to FY{current}?",
+                difficulty="compositional", template_family="gross_margin_change",
+                oracle_steps=margin_steps, required_tool_families=["financial_statement", "calculator"],
+                fact_keys=[f"{symbol}:{metric}:{year}" for year in (previous, current) for metric in ("gross_profit", "revenue")],
+                answer_tolerance=1e-4,
+            ))
+
+        balance_years = sorted(
+            set(metrics.get("total_assets", {})) & set(metrics.get("total_liabilities", {}))
+        )[-recent_years:]
+        for year in balance_years:
+            if metrics["total_assets"][year] == 0:
+                continue
+            equity_steps = [
+                {"id": "assets", "tool": "get_financial_fact", "arguments": {
+                    "symbol": symbol, "metric": "total_assets", "fiscal_year": year, "as_of_time": as_of}},
+                {"id": "liabilities", "tool": "get_financial_fact", "arguments": {
+                    "symbol": symbol, "metric": "total_liabilities", "fiscal_year": year, "as_of_time": as_of}},
+                {"id": "equity", "tool": "calculate_difference", "arguments": {
+                    "left_observation_id": "$assets.observation_id",
+                    "right_observation_id": "$liabilities.observation_id"}},
+                {"id": "answer", "tool": "calculate_ratio", "arguments": {
+                    "numerator_observation_id": "$equity.observation_id",
+                    "denominator_observation_id": "$assets.observation_id",
+                    "scale": 100.0, "output_unit": "percent"}},
+            ]
+            tasks.append(_build_task(
+                db_path, symbol=symbol, split=split, as_of_time=as_of,
+                question=f"Compute {symbol}'s implied equity-to-assets percentage for FY{year} as of {as_of}.",
+                difficulty="compositional", template_family="equity_to_assets",
+                oracle_steps=equity_steps, required_tool_families=["financial_statement", "calculator"],
+                fact_keys=[f"{symbol}:total_assets:{year}", f"{symbol}:total_liabilities:{year}"],
+                answer_tolerance=1e-4,
+                graph_metadata={"observation_reuse_count": 1},
+            ))
+
+    for task in tasks:
+        task.metadata["generator"] = "long_graph_v1"
+
+    symbols_by_split: dict[str, list[str]] = {}
+    for symbol, split in company_splits.items():
+        if symbol.upper() in facts:
+            symbols_by_split.setdefault(split, []).append(symbol.upper())
+    for split, symbols in sorted(symbols_by_split.items()):
+        for left_symbol, right_symbol in zip(sorted(symbols), sorted(symbols)[1:]):
+            left = facts[left_symbol]
+            right = facts[right_symbol]
+            years = sorted(
+                set(left.get("gross_profit", {}))
+                & set(left.get("revenue", {}))
+                & set(right.get("gross_profit", {}))
+                & set(right.get("revenue", {}))
+            )[-recent_years:]
+            for year in years:
+                if left["revenue"][year] == 0 or right["revenue"][year] == 0:
+                    continue
+                steps = [
+                    {"id": "left_profit", "tool": "get_financial_fact", "arguments": {
+                        "symbol": left_symbol, "metric": "gross_profit", "fiscal_year": year,
+                        "as_of_time": as_of}},
+                    {"id": "left_revenue", "tool": "get_financial_fact", "arguments": {
+                        "symbol": left_symbol, "metric": "revenue", "fiscal_year": year,
+                        "as_of_time": as_of}},
+                    {"id": "left_margin", "tool": "calculate_margin", "arguments": {
+                        "profit_observation_id": "$left_profit.observation_id",
+                        "revenue_observation_id": "$left_revenue.observation_id"}},
+                    {"id": "right_profit", "tool": "get_financial_fact", "arguments": {
+                        "symbol": right_symbol, "metric": "gross_profit", "fiscal_year": year,
+                        "as_of_time": as_of}},
+                    {"id": "right_revenue", "tool": "get_financial_fact", "arguments": {
+                        "symbol": right_symbol, "metric": "revenue", "fiscal_year": year,
+                        "as_of_time": as_of}},
+                    {"id": "right_margin", "tool": "calculate_margin", "arguments": {
+                        "profit_observation_id": "$right_profit.observation_id",
+                        "revenue_observation_id": "$right_revenue.observation_id"}},
+                    {"id": "answer", "tool": "compare_values", "arguments": {
+                        "left_observation_id": "$left_margin.observation_id",
+                        "right_observation_id": "$right_margin.observation_id"}},
+                ]
+                task = _build_task(
+                    db_path, symbol=left_symbol, split=split, as_of_time=as_of,
+                    question=(f"Which company had the higher gross margin in FY{year}, {left_symbol} or "
+                              f"{right_symbol}? Return the higher margin percentage."),
+                    difficulty="compositional", template_family="cross_company_gross_margin",
+                    oracle_steps=steps, required_tool_families=["financial_statement", "calculator"],
+                    fact_keys=[
+                        f"{company}:{metric}:{year}"
+                        for company in (left_symbol, right_symbol)
+                        for metric in ("gross_profit", "revenue")
+                    ],
+                    answer_tolerance=1e-4,
+                    graph_metadata={"secondary_symbol": right_symbol},
+                )
+                task.metadata["generator"] = "long_graph_v1"
+                tasks.append(task)
     tasks.sort(key=lambda task: task.task_id)
     assert_no_fact_leakage(tasks)
     return tasks

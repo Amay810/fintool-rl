@@ -9,7 +9,8 @@ from typing import Any
 from .contracts import TaskSpec, Trajectory
 from .schema import TOOL_FAMILY_BY_NAME
 
-REWARD_VERSION = "m1-v2"
+REWARD_VERSION = "m1-v3"
+EXPLORATION_ALLOWANCE = 1
 
 
 @dataclass(frozen=True)
@@ -89,8 +90,11 @@ def grade_trajectory(task: TaskSpec, trajectory: Trajectory) -> RewardVector:
     required_family_coverage = 1.0 if not required else len(required & used_families) / len(required)
 
     expected_steps = max(1, len(task.oracle_steps))
-    extra_steps = max(0, len(calls) - expected_steps)
-    efficiency = max(0.0, 1.0 - extra_steps / expected_steps)
+    step_budget = expected_steps + EXPLORATION_ALLOWANCE
+    over_budget_steps = max(0, len(calls) - step_budget)
+    # Efficiency is diagnostic only. One exploratory call beyond the oracle is
+    # explicitly free; further calls lower this value but never lower reward.
+    efficiency = max(0.0, 1.0 - over_budget_steps / expected_steps)
 
     hard_failure: str | None = None
     # Terminal reasons from the harness take priority so format / API failures are
@@ -112,16 +116,15 @@ def grade_trajectory(task: TaskSpec, trajectory: Trajectory) -> RewardVector:
     if hard_failure:
         total = 0.0
     else:
-        # Provisional M1 scalarization.  The vector is the source of truth; these
-        # weights must be revisited after baseline distributions are available.
+        # Efficiency is deliberately excluded from scalar reward in m1-v3. It is
+        # retained in the vector for cost and reward-hacking diagnostics.
         total = (
-            0.45 * answer_correct
-            + 0.20 * grounded
+            0.50 * answer_correct
+            + 0.25 * grounded
             + 0.10 * execution_valid
             + 0.05 * argument_valid
             + 0.05 * temporal_valid
             + 0.05 * required_family_coverage
-            + 0.10 * efficiency
         )
     return RewardVector(
         execution_valid=execution_valid,

@@ -25,11 +25,11 @@ class AgentAction:
     answer: dict[str, Any] | None = None
 
     @classmethod
-    def tool(cls, name: str, **arguments: Any) -> "AgentAction":
+    def tool(cls, name: str, **arguments: Any) -> AgentAction:
         return cls(kind="tool", tool_name=name, arguments=arguments)
 
     @classmethod
-    def final(cls, value: float, unit: str, observation_ids: list[str]) -> "AgentAction":
+    def final(cls, value: float, unit: str, observation_ids: list[str]) -> AgentAction:
         return cls(
             kind="answer",
             answer={"value": value, "unit": unit, "observation_ids": observation_ids},
@@ -61,7 +61,7 @@ class TaskSpec:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "TaskSpec":
+    def from_dict(cls, payload: dict[str, Any]) -> TaskSpec:
         return cls(**payload)
 
 
@@ -74,7 +74,8 @@ class Trajectory:
     tool_calls: list[ToolCall] = field(default_factory=list)
     final_answer: dict[str, Any] | None = None
     terminal_reason: str | None = None
+    generated_tokens: int = 0
+    policy_version: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-

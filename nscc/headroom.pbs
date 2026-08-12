@@ -1,0 +1,59 @@
+#!/bin/bash
+#PBS -N fintool-headroom
+#PBS -q normal
+#PBS -P personal
+#PBS -l select=1:ncpus=16:ngpus=4:mem=110gb
+#PBS -l walltime=24:00:00
+#PBS -j oe
+
+# Usage:
+# qsub -v MODEL=/absolute/path/to/sft-checkpoint,POLICY_VERSION=sft-v1 nscc/headroom.pbs
+
+set -euo pipefail
+cd "$PBS_O_WORKDIR"
+source .venv/bin/activate
+
+: "${MODEL:?MODEL must be the absolute SFT checkpoint path}"
+POLICY_VERSION="${POLICY_VERSION:-sft-v1}"
+PORT=8123
+TASKS=data/readiness_train_tasks.jsonl
+OUT="logs/headroom_${POLICY_VERSION}"
+mkdir -p logs
+
+vllm serve "$MODEL" \
+  --served-model-name "$POLICY_VERSION" \
+  --port "$PORT" \
+  --data-parallel-size 4 \
+  --tensor-parallel-size 1 \
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes \
+  --max-model-len 16384 \
+  > "${OUT}.vllm.log" 2>&1 &
+VLLM_PID=$!
+trap 'kill $VLLM_PID 2>/dev/null || true' EXIT
+
+until curl -sf "http://127.0.0.1:${PORT}/v1/models" > /dev/null; do sleep 10; done
+
+export FINTOOL_LLM_BASE_URL="http://127.0.0.1:${PORT}/v1"
+export FINTOOL_LLM_MODEL="$POLICY_VERSION"
+export FINTOOL_POLICY_VERSION="$POLICY_VERSION"
+export FINTOOL_LLM_API_KEY=EMPTY
+export FINTOOL_LLM_TEMPERATURE=0.7
+export FINTOOL_LLM_TOP_P=0.8
+export FINTOOL_LLM_TOP_K=20
+export FINTOOL_LLM_MIN_P=0
+
+fintool-rl sample-headroom \
+  --db data/sec_snapshot_15.sqlite \
+  --tasks "$TASKS" \
+  --store "${OUT}.sqlite" \
+  --samples-per-task 32 \
+  --max-steps 10 \
+  --seed-base 100000 \
+  --skip-existing
+
+fintool-rl readiness-report \
+  --db data/sec_snapshot_15.sqlite \
+  --tasks "$TASKS" \
+  --store "${OUT}.sqlite" \
+  --report "${OUT}.readiness.json"
