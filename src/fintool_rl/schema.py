@@ -9,6 +9,14 @@ from __future__ import annotations
 import re
 from typing import Any
 
+FINANCIAL_METRICS = (
+    "revenue",
+    "gross_profit",
+    "net_income",
+    "total_assets",
+    "total_liabilities",
+)
+
 
 class ToolArgumentError(ValueError):
     """Arguments do not satisfy a declared tool contract."""
@@ -40,7 +48,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "symbol": _string("Canonical uppercase ticker."),
-                "metric": _string("Canonical financial metric."),
+                "metric": _string(
+                    "Canonical financial metric.",
+                    enum=list(FINANCIAL_METRICS),
+                ),
                 "as_of_time": _string("Information cutoff in YYYY-MM-DD format."),
             },
             "required": ["symbol", "metric", "as_of_time"],
@@ -54,7 +65,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "symbol": _string("Canonical uppercase ticker."),
-                "metric": _string("Canonical metric such as revenue or net_income."),
+                "metric": _string(
+                    "Canonical financial metric.",
+                    enum=list(FINANCIAL_METRICS),
+                ),
                 "fiscal_year": {"type": "integer", "minimum": 1900, "maximum": 2200},
                 "as_of_time": _string("Information cutoff in YYYY-MM-DD format."),
             },
@@ -239,6 +253,9 @@ def validate_arguments(tool_name: str, arguments: dict[str, Any]) -> None:
             )
         if "pattern" in spec and not re.fullmatch(spec["pattern"], value):
             raise ToolArgumentError(f"{tool_name}.{name}: does not match {spec['pattern']}")
+        if "enum" in spec and value not in spec["enum"]:
+            legal = ", ".join(str(item) for item in spec["enum"])
+            raise ToolArgumentError(f"{tool_name}.{name}: must be one of: {legal}")
         if "minimum" in spec and value < spec["minimum"]:
             raise ToolArgumentError(f"{tool_name}.{name}: below minimum")
         if "maximum" in spec and value > spec["maximum"]:
@@ -250,10 +267,11 @@ def prompt_block() -> str:
     for schema in TOOL_SCHEMAS:
         params = schema["parameters"]
         required = set(params.get("required", []))
-        fields = ", ".join(
-            f"{name}: {spec['type']}{'' if name in required else ' (optional)'}"
-            for name, spec in params["properties"].items()
-        )
+        rendered_fields: list[str] = []
+        for name, spec in params["properties"].items():
+            enum_hint = f" enum={spec['enum']}" if "enum" in spec else ""
+            optional_hint = "" if name in required else " (optional)"
+            rendered_fields.append(f"{name}: {spec['type']}{enum_hint}{optional_hint}")
+        fields = ", ".join(rendered_fields)
         lines.append(f"- {schema['name']}({fields}) — {schema['description']}")
     return "\n".join(lines)
-

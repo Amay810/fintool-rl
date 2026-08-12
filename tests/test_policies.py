@@ -6,8 +6,17 @@ import pytest
 
 from fintool_rl.contracts import Trajectory
 from fintool_rl.harness import AgentObservation, HarnessRunner
-from fintool_rl.policies import ActionParseError, JsonActionPolicy, ModelCallError, parse_action
+from fintool_rl.policies import (
+    ActionParseError,
+    JsonActionPolicy,
+    ModelCallError,
+    OpenAICompatiblePolicy,
+    _openai_tools,
+    _parse_native_answer,
+    parse_action,
+)
 from fintool_rl.reward import grade_trajectory
+from fintool_rl.schema import TOOL_SCHEMAS
 
 
 def test_parse_tool_and_answer_actions():
@@ -26,6 +35,57 @@ def test_parse_rejects_non_json_or_ambiguous_payloads():
     assert "I think the answer is 4" in exc_info.value.raw_text
     with pytest.raises(ActionParseError):
         parse_action('{"kind":"tool","tool_name":4,"arguments":{}}')
+
+
+def test_native_function_schema_and_final_answer_parser():
+    tools = _openai_tools(TOOL_SCHEMAS)
+    fact = next(tool for tool in tools if tool["function"]["name"] == "get_financial_fact")
+    assert fact["type"] == "function"
+    assert "total_assets" in fact["function"]["parameters"]["properties"]["metric"]["enum"]
+    assert any(tool["function"]["name"] == "submit_answer" for tool in tools)
+    answer = _parse_native_answer('{"value":1.0,"unit":"percent","observation_ids":["obs_x"]}')
+    assert answer.answer == {"value": 1.0, "unit": "percent", "observation_ids": ["obs_x"]}
+
+
+def test_native_policy_preserves_assistant_tool_and_tool_result_messages():
+    policy = OpenAICompatiblePolicy(base_url="http://unused", model="qwen")
+    responses = iter([
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{
+                "id": "call_1",
+                "type": "function",
+                "function": {
+                    "name": "get_company_profile",
+                    "arguments": '{"symbol":"ALFA","as_of_time":"2025-03-31"}',
+                },
+            }],
+        },
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{
+                "id": "call_2",
+                "type": "function",
+                "function": {
+                    "name": "submit_answer",
+                    "arguments": '{"value":1,"unit":"USD_million","observation_ids":["obs_x"]}',
+                },
+            }],
+        },
+    ])
+    policy._chat = lambda: next(responses)
+    public = {"task_id": "t1", "question": "q", "as_of_time": "2025-03-31"}
+    policy.reset(public)
+    first = policy.act(AgentObservation(task=public, tool_schemas=TOOL_SCHEMAS, remaining_steps=3))
+    assert first.tool_name == "get_company_profile"
+    result = {"ok": True, "provenance": {"observation_id": "obs_x"}}
+    final = policy.act(
+        AgentObservation(task=public, tool_schemas=TOOL_SCHEMAS, tool_results=[result], remaining_steps=2)
+    )
+    assert final.kind == "answer"
+    assert any(message.get("role") == "tool" and message.get("tool_call_id") == "call_1" for message in policy.messages)
 
 
 def test_json_policy_prompt_contains_only_public_task_and_observations():

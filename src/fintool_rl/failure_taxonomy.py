@@ -9,11 +9,14 @@ from typing import Any
 from .contracts import TaskSpec, ToolCall, Trajectory
 from .reward import RewardVector
 
-TAXONOMY_VERSION = "m1-baseline-v1"
+TAXONOMY_VERSION = "m1-baseline-v2"
+
+SUCCESS_LABELS = {"success", "correct_but_inefficient"}
 
 # Ordered from most specific operational failure to answer-quality failures.
 PRIMARY_LABELS = (
     "success",
+    "correct_but_inefficient",
     "model_call_error",
     "invalid_answer_format",
     "invalid_arguments",
@@ -82,7 +85,13 @@ def classify_failure(
     if errors:
         evidence["tool_errors"] = errors[:8]
 
-    if reward.hard_failure is None and reward.total == 1.0 and reward.answer_correct == 1.0:
+    if reward.hard_failure is None and reward.answer_correct == 1.0 and reward.grounded == 1.0:
+        if reward.efficiency < 1.0:
+            return FailureLabel(
+                primary="correct_but_inefficient",
+                secondary=("inefficient",),
+                evidence=evidence,
+            )
         return FailureLabel(primary="success", secondary=tuple(secondary), evidence=evidence)
 
     if reward.hard_failure == "model_call_error" or trajectory.terminal_reason == "model_call_error":
@@ -141,5 +150,5 @@ def summarize_labels(labels: list[FailureLabel]) -> dict[str, Any]:
         "n": len(labels),
         "primary": dict(sorted(primary.items())),
         "secondary": dict(sorted(secondary.items())),
-        "success_rate": primary.get("success", 0) / max(1, len(labels)),
+        "success_rate": sum(primary.get(label, 0) for label in SUCCESS_LABELS) / max(1, len(labels)),
     }

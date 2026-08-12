@@ -1,10 +1,13 @@
 # FinTool-RL
 
-> A replayable financial tool environment and decomposable reward system for multi-turn agent post-training.
+> A replayable financial tool environment for studying signal-efficient DrGRPO curricula on executable graphs.
 
 FinTool-RL is the M1 foundation for studying rejection-sampling SFT, trajectory preference optimization,
 and agentic GRPO on financial tool-use tasks.  The current repository is an **environment scaffold**, not a
 trained financial model and not an investment product.
+
+Milestones, experiment rationale, and NSCC execution rules live in the
+[project plan](docs/PROJECT_PLAN.md).
 
 ## Current status
 
@@ -20,9 +23,13 @@ Implemented and verified:
 - leakage-resistant trajectory harness, replay policy, and append-only store;
 - OpenAI-compatible policy adapter for local vLLM or hosted baselines;
 - action-parse and model-call errors recorded per trajectory without aborting a batch;
-- 33 passing tests and an 85-task fixture oracle smoke run;
+- 51 passing tests and an 85-task fixture oracle smoke run;
 - a frozen 15-company SEC snapshot with 1,015 annual facts;
-- an 800-task real-data set with exact 500/100/200 company-disjoint splits and a perfect oracle smoke run.
+- an 800-task real-data set with exact 500/100/200 company-disjoint splits and a perfect oracle smoke run;
+- 126 additional 4/6/7-call graphs with discovery and observation reuse, all oracle-verified;
+- train-only repeated headroom sampling with exact completion-token/policy-version accounting;
+- M2.5 learnability, curriculum-opportunity, ICC/calibration gates;
+- a framework-neutral discounted-posterior, stratified token-quota controller.
 
 The bundled dataset is explicitly marked `synthetic_fixture`.  Its only purpose is CI and environment
 development.  No fixture number should be presented as a real financial fact or experimental baseline.
@@ -59,9 +66,9 @@ provenance remains replayable.
 
 Invalid arguments, temporal violations, execution failures, invalid final-answer formats, and
 model-call failures are hard failures.  Format failures raised before any tool call are classified
-from `terminal_reason` rather than collapsed into `execution_failure`.  The scalar weights in
-`reward.py` are provisional; the vector is the source of truth until model baseline distributions
-and reward-hacking cases have been audited.
+from `terminal_reason` rather than collapsed into `execution_failure`. The decomposable scalar remains a
+baseline diagnostic. The core DrGRPO curriculum uses only the pure binary terminal outcome: no hard
+failure, correct answer, and grounded answer. Shaping dimensions do not define routing variance.
 
 Golden tool paths are not treated as the only valid solution.  Required tool *families* provide diagnostic
 coverage while final numeric correctness and observation grounding remain the primary task signals.
@@ -126,6 +133,19 @@ licensed challenge-set step.
 
 See [M1 design contract](docs/M1_DESIGN.md) for acceptance gates and non-goals.
 
+Build the local long-graph, combined RL, readiness, and SFT artifacts with:
+
+```powershell
+fintool-rl build-long-graph-pool
+fintool-rl build-rl-pool
+fintool-rl build-readiness-pool
+fintool-rl export-sft --split train --output data/sft_train.jsonl
+fintool-rl export-sft --split dev --output data/sft_dev.jsonl
+```
+
+The generated artifacts are ignored and reproducible from the frozen snapshot. See the
+[local-to-NSCC handoff](docs/LOCAL_TO_NSCC_HANDOFF.md) for the ordered GPU work.
+
 ## SEC Company Facts import
 
 The importer follows the SEC's documented Company Facts endpoint and selects annual USD facts filed no later
@@ -179,5 +199,9 @@ The first real-data smoke run is recorded in [SEC real-data smoke](docs/SEC_REAL
 
 1. **M1:** real frozen dataset, 12–20 tools, generated + audited tasks, local-model baselines, failure taxonomy.
 2. **M2:** reward-filtered trajectory collection and rejection-sampling SFT.
-3. **M3:** whole-trajectory DPO, followed by first-divergence analysis.
-4. **M4:** multi-turn GRPO through verl-tool after environment and reward gates pass.
+3. **M2.5:** n=32 train-only headroom measurement and a formal RL GO/NO-GO decision.
+4. **M3:** uniform and static-band DrGRPO with pure binary terminal reward.
+5. **M3.5:** discounted online graph curriculum under fixed generated-token quotas.
+
+The project thesis and experiment logic are in [PROJECT_DESIGN.md](docs/PROJECT_DESIGN.md); the
+pre-experiment proof obligations are in [RL_READINESS_PROTOCOL.md](docs/RL_READINESS_PROTOCOL.md).

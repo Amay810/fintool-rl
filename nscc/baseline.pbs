@@ -1,0 +1,100 @@
+#!/bin/bash
+#PBS -N fintool-baseline
+#PBS -q normal
+#PBS -P personal
+#PBS -l select=1:ncpus=16:ngpus=4:mem=110gb
+#PBS -l walltime=12:00:00
+#PBS -j oe
+
+# Serves the policy model with vLLM on the compute node and runs the frozen baseline
+# against it inside the same job. The login node only submits this.
+#
+#   qsub -v MODEL=/path/to/Qwen3-4B-Instruct,SPLIT=dev,LIMIT=20 nscc/baseline.pbs
+#
+# MODEL   absolute path to the checkpoint (base or LoRA-merged)
+# SPLIT   train | dev | test | challenge      (default dev)
+# LIMIT   0 for the full split               (default 0)
+# TAG     label used in output filenames     (default basename of MODEL)
+
+set -euo pipefail
+
+PROJECT=/scratch/users/ntu/s250045/fintool-rl
+ENV=/scratch/users/ntu/s250045/conda-envs/fintool-vllm0102
+
+cd "$PROJECT"
+module load miniforge3/25.3.1
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$ENV"
+
+export PYTHONNOUSERSITE=1
+export HF_HOME=/scratch/users/ntu/s250045/hf-cache
+
+: "${MODEL:?MODEL must be an absolute checkpoint path}"
+SPLIT="${SPLIT:-dev}"
+LIMIT="${LIMIT:-0}"
+TAG="${TAG:-$(basename "$MODEL")}"
+PORT=8123
+
+DB="${DB:-data/sec_snapshot_15.sqlite}"
+TASKS="${TASKS:-data/rl_task_pool.jsonl}"
+OUT="logs/${TAG}_${SPLIT}"
+mkdir -p logs
+
+echo "PROJECT=$PROJECT"
+echo "CONDA_PREFIX=$CONDA_PREFIX"
+echo "MODEL=$MODEL"
+which python
+which fintool-rl
+which vllm
+python -c "import torch, vllm; print('torch:', torch.__version__, 'CUDA:', torch.version.cuda, 'vLLM:', vllm.__version__)"
+nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+
+test -f "$MODEL/config.json"
+test -f "$DB"
+test -f "$TASKS"
+
+vllm serve "$MODEL" \
+  --served-model-name "$TAG" \
+  --port "$PORT" \
+  --data-parallel-size 4 \
+  --tensor-parallel-size 1 \
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes \
+  --max-model-len 16384 \
+  > "logs/vllm_${TAG}.log" 2>&1 &
+VLLM_PID=$!
+cleanup() { kill "$VLLM_PID" 2>/dev/null || true; }
+trap cleanup EXIT
+
+for _ in $(seq 1 180); do
+  if curl -sf "http://127.0.0.1:${PORT}/v1/models" > /dev/null; then
+    break
+  fi
+  if ! kill -0 "$VLLM_PID" 2>/dev/null; then
+    echo "vLLM exited before becoming ready"
+    tail -n 200 "logs/vllm_${TAG}.log"
+    exit 1
+  fi
+  sleep 10
+done
+curl -sf "http://127.0.0.1:${PORT}/v1/models" > /dev/null
+
+export FINTOOL_LLM_BASE_URL="http://127.0.0.1:${PORT}/v1"
+export FINTOOL_LLM_MODEL="$TAG"
+export FINTOOL_POLICY_VERSION="$TAG"
+export FINTOOL_LLM_API_KEY="EMPTY"
+export FINTOOL_LLM_TEMPERATURE="0.7"
+export FINTOOL_LLM_TOP_P="0.8"
+export FINTOOL_LLM_TOP_K="20"
+export FINTOOL_LLM_MIN_P="0"
+export FINTOOL_LLM_SEED="0"
+
+ARGS=(baseline
+  --db "$DB" --tasks "$TASKS" --split "$SPLIT"
+  --store "${OUT}.sqlite"
+  --report "${OUT}.report.json"
+  --failure-table "${OUT}.failures.jsonl"
+  --skip-existing --max-steps 10)
+[ "$LIMIT" -gt 0 ] && ARGS+=(--limit "$LIMIT")
+
+fintool-rl "${ARGS[@]}"

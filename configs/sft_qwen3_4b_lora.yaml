@@ -1,0 +1,25 @@
+experiment: sft-qwen3-4b-lora-v1
+model: Qwen/Qwen3-4B-Instruct-2507
+model_revision: FILL_BEFORE_SUBMISSION
+train_data: data/sft_train.jsonl
+dev_data: data/sft_dev.jsonl
+reward_contract: pure_terminal_m1_v3
+sequence_length: 8192
+lora:
+  rank: 16
+  alpha: 32
+  dropout: 0.0
+training:
+  epochs: 3
+  learning_rate: 0.00002
+  warmup_ratio: 0.05
+  gradient_checkpointing: true
+  bf16: true
+selection:
+  primary: dev_terminal_success
+  constraints:
+    - dev_grounded_rate
+    - dev_invalid_action_rate
+notes:
+  - Training launcher is intentionally not frozen until the Agent Lightning/native-verl token-identity smoke.
+  - Record exact library commits, GPU placement, seed, and generated config in the run manifest.

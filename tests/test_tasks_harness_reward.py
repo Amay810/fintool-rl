@@ -6,10 +6,17 @@ import pytest
 
 from fintool_rl.contracts import AgentAction, TaskSpec, Trajectory
 from fintool_rl.database import build_fixture_snapshot
+from fintool_rl.failure_taxonomy import classify_failure
 from fintool_rl.harness import AgentObservation, HarnessRunner, OraclePolicy, ReplayPolicy
-from fintool_rl.reward import grade_trajectory
+from fintool_rl.reward import REWARD_VERSION, grade_trajectory
+from fintool_rl.tasks import (
+    assert_no_fact_leakage,
+    generate_fixture_tasks,
+    generate_growth_of_growth_tasks,
+    generate_long_graph_tasks,
+    select_split_targets,
+)
 from fintool_rl.tools import FinancialTools
-from fintool_rl.tasks import assert_no_fact_leakage, generate_fixture_tasks, select_split_targets
 
 
 @pytest.fixture()
@@ -37,6 +44,21 @@ def test_oracle_policy_gets_full_reward(environment):
         assert reward.total == 1.0
         if task.template_family == "liabilities_to_assets":
             assert task.answer["unit"] == "percent"
+
+
+def test_efficiency_is_budgeted_diagnostic_not_success_or_reward_gate(environment):
+    db, tasks = environment
+    task = next(task for task in tasks if task.template_family == "financial_fact_lookup")
+    runner = HarnessRunner(db)
+    trajectory, _ = runner.run(task, OraclePolicy())
+    # Duplicate successful calls to exceed oracle steps + one exploration call.
+    trajectory.tool_calls.extend([trajectory.tool_calls[0], trajectory.tool_calls[0]])
+    reward = grade_trajectory(task, trajectory)
+    label = classify_failure(task, trajectory, reward)
+    assert reward.version == REWARD_VERSION == "m1-v3"
+    assert reward.efficiency == 0.0
+    assert reward.total == 1.0
+    assert label.primary == "correct_but_inefficient"
 
 
 def test_year_over_year_pairs_are_adjacent(environment):
@@ -147,3 +169,33 @@ def test_split_target_selection_is_exact_deterministic_and_family_balanced(envir
     assert [task.task_id for task in first] == [task.task_id for task in second]
     assert {split: sum(task.split == split for task in first) for split in targets} == targets
     assert len({task.template_family for task in first if task.split == "train"}) >= 3
+
+
+def test_growth_of_growth_probe_has_six_replayable_calls(environment):
+    db, _ = environment
+    tasks = generate_growth_of_growth_tasks(db, {"GAMA": "dev"}, split="dev", limit=2)
+    assert len(tasks) == 2
+    assert all(task.template_family == "growth_of_growth" for task in tasks)
+    assert all(len(task.oracle_steps) == 6 for task in tasks)
+    runner = HarnessRunner(db, max_steps=8)
+    for task in tasks:
+        _, reward = runner.run(task, OraclePolicy())
+        assert reward.total == 1.0
+
+
+def test_long_graph_pool_has_discovery_reuse_and_seven_call_families(environment):
+    db, _ = environment
+    tasks = generate_long_graph_tasks(
+        db,
+        {"ALFA": "train", "BETA": "train", "GAMA": "dev", "DELT": "test"},
+    )
+    assert {"latest_period_growth_discovery", "growth_of_growth", "gross_margin_change"} <= {
+        task.template_family for task in tasks
+    }
+    assert any(task.metadata["discovery_required"] for task in tasks)
+    assert any(task.metadata["observation_reuse_count"] for task in tasks)
+    assert any(len(task.oracle_steps) == 7 for task in tasks)
+    runner = HarnessRunner(db, max_steps=8)
+    for task in tasks:
+        _, reward = runner.run(task, OraclePolicy())
+        assert reward.total == 1.0

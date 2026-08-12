@@ -1,0 +1,30 @@
+#!/bin/bash
+#PBS -N fintool-oracle
+#PBS -q normal
+#PBS -P personal
+#PBS -l select=1:ncpus=16:ngpus=0:mem=16gb
+#PBS -l walltime=00:30:00
+#PBS -j oe
+
+set -euo pipefail
+
+PROJECT=/scratch/users/ntu/s250045/fintool-rl
+ENV=/scratch/users/ntu/s250045/conda-envs/fintool-vllm0102
+
+cd "$PROJECT"
+module load miniforge3/25.3.1
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$ENV"
+
+export PYTHONNOUSERSITE=1
+
+echo "PROJECT=$PROJECT"
+echo "CONDA_PREFIX=$CONDA_PREFIX"
+which python
+which fintool-rl
+
+mkdir -p logs
+fintool-rl smoke \
+  --db data/sec_snapshot_15.sqlite \
+  --tasks data/long_graph_tasks.jsonl \
+  --store logs/long_graph_oracle_smoke.sqlite

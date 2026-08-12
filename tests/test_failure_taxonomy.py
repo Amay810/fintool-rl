@@ -84,6 +84,16 @@ def test_oracle_baseline_report_is_all_success(tmp_path: Path):
     )
     assert report["overall"]["n"] == 10
     assert report["overall"]["success_rate"] == 1.0
+    assert report["contract_metrics"]["format_compliance_rate"] == 1.0
+    assert report["contract_metrics"]["metric_naming_accuracy"] == 1.0
+    assert report["protocol"]["decoding"] == {
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0.0,
+        "seed": 0,
+        "tool_protocol": "openai-native-function-calling",
+    }
     assert report["failure_taxonomy"]["primary"] == {"success": 10}
 
 

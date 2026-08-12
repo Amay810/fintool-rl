@@ -1,0 +1,94 @@
+#!/bin/bash
+#PBS -N fintool-headroom
+#PBS -q normal
+#PBS -P personal
+#PBS -l select=1:ncpus=16:ngpus=4:mem=110gb
+#PBS -l walltime=24:00:00
+#PBS -j oe
+
+# Usage:
+# qsub -v MODEL=/absolute/path/to/sft-checkpoint,POLICY_VERSION=sft-v1 nscc/headroom.pbs
+
+set -euo pipefail
+
+PROJECT=/scratch/users/ntu/s250045/fintool-rl
+ENV=/scratch/users/ntu/s250045/conda-envs/fintool-vllm0102
+
+cd "$PROJECT"
+module load miniforge3/25.3.1
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$ENV"
+
+export PYTHONNOUSERSITE=1
+export HF_HOME=/scratch/users/ntu/s250045/hf-cache
+
+: "${MODEL:?MODEL must be the absolute SFT checkpoint path}"
+POLICY_VERSION="${POLICY_VERSION:-sft-v1}"
+PORT=8123
+TASKS=data/readiness_train_tasks.jsonl
+OUT="logs/headroom_${POLICY_VERSION}"
+mkdir -p logs
+
+echo "PROJECT=$PROJECT"
+echo "CONDA_PREFIX=$CONDA_PREFIX"
+echo "MODEL=$MODEL"
+echo "POLICY_VERSION=$POLICY_VERSION"
+which python
+which fintool-rl
+which vllm
+python -c "import torch, vllm; print('torch:', torch.__version__, 'CUDA:', torch.version.cuda, 'vLLM:', vllm.__version__)"
+nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+
+test -f "$MODEL/config.json"
+test -f data/sec_snapshot_15.sqlite
+test -f "$TASKS"
+
+vllm serve "$MODEL" \
+  --served-model-name "$POLICY_VERSION" \
+  --port "$PORT" \
+  --data-parallel-size 4 \
+  --tensor-parallel-size 1 \
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes \
+  --max-model-len 16384 \
+  > "${OUT}.vllm.log" 2>&1 &
+VLLM_PID=$!
+cleanup() { kill "$VLLM_PID" 2>/dev/null || true; }
+trap cleanup EXIT
+
+for _ in $(seq 1 180); do
+  if curl -sf "http://127.0.0.1:${PORT}/v1/models" > /dev/null; then
+    break
+  fi
+  if ! kill -0 "$VLLM_PID" 2>/dev/null; then
+    echo "vLLM exited before becoming ready"
+    tail -n 200 "${OUT}.vllm.log"
+    exit 1
+  fi
+  sleep 10
+done
+curl -sf "http://127.0.0.1:${PORT}/v1/models" > /dev/null
+
+export FINTOOL_LLM_BASE_URL="http://127.0.0.1:${PORT}/v1"
+export FINTOOL_LLM_MODEL="$POLICY_VERSION"
+export FINTOOL_POLICY_VERSION="$POLICY_VERSION"
+export FINTOOL_LLM_API_KEY=EMPTY
+export FINTOOL_LLM_TEMPERATURE=0.7
+export FINTOOL_LLM_TOP_P=0.8
+export FINTOOL_LLM_TOP_K=20
+export FINTOOL_LLM_MIN_P=0
+
+fintool-rl sample-headroom \
+  --db data/sec_snapshot_15.sqlite \
+  --tasks "$TASKS" \
+  --store "${OUT}.sqlite" \
+  --samples-per-task 32 \
+  --max-steps 10 \
+  --seed-base 100000 \
+  --skip-existing
+
+fintool-rl readiness-report \
+  --db data/sec_snapshot_15.sqlite \
+  --tasks "$TASKS" \
+  --store "${OUT}.sqlite" \
+  --report "${OUT}.readiness.json"
