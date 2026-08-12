@@ -7,8 +7,22 @@
 #PBS -j oe
 
 set -euo pipefail
-cd "$PBS_O_WORKDIR"
-source .venv/bin/activate
+
+PROJECT=/scratch/users/ntu/s250045/fintool-rl
+ENV=/scratch/users/ntu/s250045/conda-envs/fintool-vllm0102
+
+cd "$PROJECT"
+module load miniforge3/25.3.1
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$ENV"
+
+export PYTHONNOUSERSITE=1
+
+echo "PROJECT=$PROJECT"
+echo "CONDA_PREFIX=$CONDA_PREFIX"
+which python
+which fintool-rl
+
 mkdir -p logs
 fintool-rl smoke \
   --db data/sec_snapshot_15.sqlite \

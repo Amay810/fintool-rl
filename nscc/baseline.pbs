@@ -18,9 +18,18 @@
 
 set -euo pipefail
 
-cd "$PBS_O_WORKDIR"
-source .venv/bin/activate
+PROJECT=/scratch/users/ntu/s250045/fintool-rl
+ENV=/scratch/users/ntu/s250045/conda-envs/fintool-vllm0102
 
+cd "$PROJECT"
+module load miniforge3/25.3.1
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$ENV"
+
+export PYTHONNOUSERSITE=1
+export HF_HOME=/scratch/users/ntu/s250045/hf-cache
+
+: "${MODEL:?MODEL must be an absolute checkpoint path}"
 SPLIT="${SPLIT:-dev}"
 LIMIT="${LIMIT:-0}"
 TAG="${TAG:-$(basename "$MODEL")}"
@@ -30,6 +39,19 @@ DB="${DB:-data/sec_snapshot_15.sqlite}"
 TASKS="${TASKS:-data/rl_task_pool.jsonl}"
 OUT="logs/${TAG}_${SPLIT}"
 mkdir -p logs
+
+echo "PROJECT=$PROJECT"
+echo "CONDA_PREFIX=$CONDA_PREFIX"
+echo "MODEL=$MODEL"
+which python
+which fintool-rl
+which vllm
+python -c "import torch, vllm; print('torch:', torch.__version__, 'CUDA:', torch.version.cuda, 'vLLM:', vllm.__version__)"
+nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+
+test -f "$MODEL/config.json"
+test -f "$DB"
+test -f "$TASKS"
 
 vllm serve "$MODEL" \
   --served-model-name "$TAG" \
@@ -41,14 +63,25 @@ vllm serve "$MODEL" \
   --max-model-len 16384 \
   > "logs/vllm_${TAG}.log" 2>&1 &
 VLLM_PID=$!
-trap 'kill $VLLM_PID 2>/dev/null || true' EXIT
+cleanup() { kill "$VLLM_PID" 2>/dev/null || true; }
+trap cleanup EXIT
 
-until curl -sf "http://127.0.0.1:${PORT}/v1/models" > /dev/null; do
+for _ in $(seq 1 180); do
+  if curl -sf "http://127.0.0.1:${PORT}/v1/models" > /dev/null; then
+    break
+  fi
+  if ! kill -0 "$VLLM_PID" 2>/dev/null; then
+    echo "vLLM exited before becoming ready"
+    tail -n 200 "logs/vllm_${TAG}.log"
+    exit 1
+  fi
   sleep 10
 done
+curl -sf "http://127.0.0.1:${PORT}/v1/models" > /dev/null
 
 export FINTOOL_LLM_BASE_URL="http://127.0.0.1:${PORT}/v1"
 export FINTOOL_LLM_MODEL="$TAG"
+export FINTOOL_POLICY_VERSION="$TAG"
 export FINTOOL_LLM_API_KEY="EMPTY"
 export FINTOOL_LLM_TEMPERATURE="0.7"
 export FINTOOL_LLM_TOP_P="0.8"

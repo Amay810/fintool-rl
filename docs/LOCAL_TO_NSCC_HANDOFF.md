@@ -22,8 +22,10 @@ Frozen local artifact hashes:
 
 ## NSCC sequence
 
-1. Pull the reviewed commit and rebuild the editable environment.
-2. Run the CPU oracle smoke (`qsub nscc/oracle_smoke.pbs`) and compare 126/126.
+1. Pull the reviewed commit and submit `qsub nscc/create_fintool_env.pbs`. Environment creation, large wheel
+   downloads, CUDA imports, and tests run only on the allocated compute node.
+2. After the environment job prints `ENVIRONMENT_READY`, run the CPU oracle smoke
+   (`qsub nscc/oracle_smoke.pbs`) and compare 126/126.
 3. Run the fair base-model baseline on the full RL pool's frozen dev split; archive SQLite, report, vLLM log,
    model revision, and PBS output.
 4. Train RS-SFT from `data/sft_train.jsonl`, selecting checkpoints only on `data/sft_dev.jsonl`. Fill the exact
@@ -37,9 +39,15 @@ Frozen local artifact hashes:
 ## Commands requiring NSCC GPU
 
 ```bash
+qsub nscc/create_fintool_env.pbs
 qsub -v MODEL=/models/Qwen3-4B-Instruct-2507,TAG=qwen3-4b-base,SPLIT=dev nscc/baseline.pbs
 qsub -v MODEL=/checkpoints/fintool-sft,POLICY_VERSION=sft-v1 nscc/headroom.pbs
 ```
+
+All PBS jobs activate the dedicated environment at
+`/scratch/users/ntu/s250045/conda-envs/fintool-vllm0102`. They do not use a repository `.venv` or the
+e-commerce environment. The login node performs only `git pull`, `qsub`, `qstat`, and small log inspection;
+it must not install vLLM/PyTorch, import CUDA packages, run tests, serve a model, or scan large directory trees.
 
 The SFT and DrGRPO PBS launchers are not fabricated here: their exact CLI depends on the framework token-identity
 smoke. Freezing a guessed launcher before that decision would violate the readiness protocol.
