@@ -1,0 +1,31 @@
+{
+  "as_of_time": "2025-03-31",
+  "created_at": "2026-08-18T11:35:25Z",
+  "evalset_id": "fixture-85-v1",
+  "generators": [
+    "synthetic_fixture_v1"
+  ],
+  "n_tasks": 85,
+  "snapshot_id": "synthetic-us-equities-v1",
+  "snapshot_sha256": "353c2d890de6e3c516218a846f89ad12c8bfd0ceb6a3d9d2c655adce91d0de7d",
+  "splits": {
+    "challenge": {
+      "n_tasks": 17,
+      "task_ids_sha256": "9de80315263cef984cc35d047e3f61b9a25dbbdd46275ee6fea27bd896737b0d"
+    },
+    "dev": {
+      "n_tasks": 17,
+      "task_ids_sha256": "df8ad2524d4210e37ec70e5304040f83bd552aca1b746c91a01cac206148d257"
+    },
+    "test": {
+      "n_tasks": 17,
+      "task_ids_sha256": "983e6370f94a44afb4f441bd91d4ae52e2242d1bd154cd25c1964ab4b782cd0b"
+    },
+    "train": {
+      "n_tasks": 34,
+      "task_ids_sha256": "178f298d33c46e7537c152329da0617fc625c8e0e9613ecf7440f28015b0fed7"
+    }
+  },
+  "tasks_file": "data/generated_fixture_tasks.jsonl",
+  "tasks_file_sha256": "da6c34e5a61da0a4c5be8a979efed33c42d2452c886d76c0781a60f230bb2dd1"
+}

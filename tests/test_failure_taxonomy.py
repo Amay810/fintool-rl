@@ -81,6 +81,11 @@ def test_oracle_baseline_report_is_all_success(tmp_path: Path):
         store_path=tmp_path / "store.sqlite",
         policy_name="OraclePolicy",
         max_steps=8,
+        # Fixture smoke run, not an evaluation run: it has no frozen evalset identity
+        # to check against, and must not pick up whichever manifest happens to sit in
+        # the working directory.  Evalset verification is covered by
+        # tests/test_evalset_freeze.py.
+        evalset_manifest_path=None,
     )
     assert report["overall"]["n"] == 10
     assert report["overall"]["success_rate"] == 1.0

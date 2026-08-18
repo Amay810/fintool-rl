@@ -20,7 +20,7 @@ Implemented and verified:
 - leakage-resistant trajectory harness, replay policy, and append-only store;
 - OpenAI-compatible policy adapter for local vLLM or hosted baselines;
 - action-parse and model-call errors recorded per trajectory without aborting a batch;
-- 52 passing tests and an 85-task fixture oracle smoke run;
+- 63 passing tests and an 85-task fixture oracle smoke run;
 - a frozen 15-company SEC snapshot with 1,015 annual facts;
 - an 800-task real-data set with exact 500/100/200 company-disjoint splits and a perfect oracle smoke run.
 
@@ -66,22 +66,25 @@ and reward-hacking cases have been audited.
 Golden tool paths are not treated as the only valid solution.  Required tool *families* provide diagnostic
 coverage while final numeric correctness and observation grounding remain the primary task signals.
 
-The dimensions are recorded separately but are **not** statistically independent, and `total` is not a
-safe stand-in for the vector.  An adversarial audit of `grade_trajectory()`
-(`docs/REWARD_ADVERSARIAL_REPORT.md`, `tests/test_reward_adversarial.py`) measured three limits that any
-consumer of these numbers needs to know:
+The dimensions are recorded separately but are **not semantically orthogonal**; some are coupled by the
+grading logic, and `total` is not a safe stand-in for the vector.  An adversarial audit of
+`grade_trajectory()` (`docs/REWARD_ADVERSARIAL_REPORT.md`, `tests/test_reward_adversarial.py`) measured
+three limits that any consumer of these numbers needs to know:
 
 - `grounded` compares the reported value against the *cited observation's* scalar, never against the gold
-  answer, so it is conditionally coupled to how the answer was produced rather than independent of it: an
-  answer copied from the wrong observation is graded as grounded;
-- consequently a wrong answer can reach `total = 0.55` while a correct one can fall to `0.65`, so any
-  `total >= threshold` filter in that band selects on `answer_correct` alone and the remaining seven
-  dimensions have no effect on the selection;
+  answer, so it is a function of how the answer was produced rather than of whether it is right: an answer
+  copied from the wrong observation is graded as grounded;
+- consequently a wrong answer can reach `total = 0.55` while a correct one can fall to `0.65`.  **Among
+  trajectories without a hard failure**, a `total >= threshold` filter with `threshold` in `(0.55, 0.65]`
+  is determined by `answer_correct` alone and the remaining dimensions have no effect on the selection.
+  The restriction matters: `if hard_failure: total = 0.0` overrides every dimension, so a correct answer
+  with a hard failure — a zero-tool-call guess, for instance — scores 0.0 and is excluded regardless;
 - `grounded` does not read the `provenance.parents` DAG, and `calculate_ratio` accepts an unconstrained
   `scale`, so a trajectory that never queries the subject company can still score `1.0`.
 
 Reward semantics are deliberately frozen until model baseline distributions exist; the audit records
-current behaviour and proposes no code change.
+current behaviour and proposes no code change.  Every claim in the audit carries a `[measured]` /
+`[derived]` / `[inferred]` evidence tag.
 
 ## Quick start
 
@@ -102,6 +105,30 @@ Bootstrap creates ignored runtime artifacts:
 - `data/generated_fixture_tasks.jsonl`;
 - `data/fixture_snapshot.manifest.json`;
 - `logs/oracle_smoke.sqlite` after the smoke run.
+
+## Freezing the evaluation set
+
+P1 measures a baseline and P5 re-measures after training.  The comparison is only meaningful if both
+runs cover the same task set, so that set's identity is pinned to a committed manifest and **verified,
+not merely recorded**:
+
+```bash
+fintool-rl freeze-evalset --tasks data/generated_sec_15_tasks.jsonl --db data/sec_snapshot_15.sqlite --evalset-id sec-800-v1
+```
+
+This writes `data/evalset_manifest.json`, which **must be committed** — it is the frozen identity, and a
+manifest that exists only on one machine protects nothing.  `data/evalset_manifest_fixture.json` is the
+committed manifest for the 85-task fixture set and is what the test suite exercises.
+
+Identity is the **set of task ids per split**, not the bytes of the task file.  A whole-file hash trips on
+key order, whitespace, and unrelated metadata edits; the task id set is what "this evaluation covered these
+questions" actually means.  Both digests are recorded; the split digests are what verification compares.
+
+Once the manifest exists at the default path, `fintool-rl baseline` and `fintool-rl analyze-baseline`
+verify against it before writing any report and **raise** on divergence, naming the split and both digests.
+The verified `evalset_id` and digests are then written into the report's `protocol` block — after the check,
+so the block is evidence rather than a restatement of what the run chose to do.  `--allow-evalset-mismatch`
+exists for knowing human override; it records `verified: false` and never masquerades as a passed check.
 
 ## Run a model baseline
 

@@ -11,8 +11,10 @@ from typing import Any
 
 from .contracts import TaskSpec, Trajectory
 from .database import snapshot_manifest
+from .evalset import DEFAULT_MANIFEST_PATH, verify_evalset_file
 from .failure_taxonomy import FailureLabel, classify_failure, summarize_labels
 from .reward import RewardVector
+from .tasks import load_tasks
 
 
 def file_sha256(path: Path | str) -> str:
@@ -114,7 +116,19 @@ def build_baseline_report(
     store_path: Path | str,
     policy_name: str,
     max_steps: int,
+    evalset_manifest_path: Path | str | None = DEFAULT_MANIFEST_PATH,
+    allow_evalset_mismatch: bool = False,
 ) -> dict[str, Any]:
+    # Fail closed *first*.  `tasks` may be a run-time filtered subset (--split,
+    # --limit), so identity is checked against the whole task file on disk: the
+    # frozen artifact is the file, not whatever this run chose to grade.  Verifying
+    # before building the protocol block is the point — recording the hashes first
+    # and comparing them afterwards would only restate the run's own choices.
+    evalset = verify_evalset_file(
+        load_tasks(tasks_path),
+        evalset_manifest_path,
+        allow_mismatch=allow_evalset_mismatch,
+    )
     records = build_baseline_records(tasks, graded)
     label_objs = [
         FailureLabel(
@@ -150,6 +164,7 @@ def build_baseline_report(
             "tasks_path": str(tasks_path),
             "store_path": str(store_path),
             "tasks_sha256": file_sha256(tasks_path),
+            "evalset": evalset,
             "snapshot_sha256": manifest["sha256"],
             "snapshot_id": manifest["metadata"].get("snapshot_id"),
             "as_of_time": manifest["metadata"].get("as_of_time"),

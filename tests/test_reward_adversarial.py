@@ -379,6 +379,35 @@ def build_wrong_answer_but_grounded(db_path: Path, task: TaskSpec) -> Trajectory
     )
 
 
+def build_correct_answer_reward_floor(db_path: Path, task: TaskSpec) -> Trajectory:
+    """The cheapest *correct* answer: right value, no citation, no required family, no efficiency.
+
+    Six successful calls, all in families the task does not require (`company`,
+    `market_data`), so `required_family_coverage` is 0.0; six calls against three
+    oracle steps drives `efficiency` to its floor; the answer cites nothing so
+    `grounded` is 0.0.  Nothing is a hard failure, so this attains the arithmetic
+    minimum `total` for `answer_correct = 1.0`.
+    """
+    tools = FinancialTools(db_path)
+    results = [tools.call("get_company_profile", symbol=BASE_SYMBOL, as_of_time=task.as_of_time)]
+    for trading_date in ("2025-01-02", "2025-01-03", "2025-01-06", "2025-01-07", "2025-01-08"):
+        results.append(
+            tools.call(
+                "get_daily_price",
+                symbol=BASE_SYMBOL,
+                trading_date=trading_date,
+                as_of_time=task.as_of_time,
+            )
+        )
+    assert all(result["ok"] for result in results)
+    assert len(tools.calls) == 2 * len(task.oracle_steps)
+    return _trajectory(
+        task,
+        list(tools.calls),
+        _answer(float(task.answer["value"]), task.answer["unit"], []),
+    )
+
+
 def build_no_hard_failure_reward_floor(db_path: Path, task: TaskSpec) -> Trajectory:
     calls, final = _oracle_run(db_path, task)
     wrong_value = float(final["scalar"]) + 10.0
@@ -403,6 +432,7 @@ CASE_BUILDERS = {
     "temporal_violation": build_temporal_violation,
     "coincidental_scalar_grounding": build_coincidental_scalar_grounding,
     "wrong_answer_but_grounded": build_wrong_answer_but_grounded,
+    "correct_answer_reward_floor": build_correct_answer_reward_floor,
     "missing_provenance_as_of_time": build_missing_provenance_as_of_time,
     "no_hard_failure_reward_floor": build_no_hard_failure_reward_floor,
     "empty_observation_ids": build_empty_observation_ids,
@@ -634,6 +664,27 @@ def test_case_12_wrong_answer_but_grounded(db_path: Path, base_task: TaskSpec) -
         required_family_coverage=1.0,
         hard_failure=None,
         total=0.55,
+    )
+
+
+def test_case_13_correct_answer_reward_floor(db_path: Path, base_task: TaskSpec) -> None:
+    # Not an exploit: the *lower* bound of the correct-answer band, measured so the
+    # RS-SFT threshold argument in Q3 rests on two measured endpoints rather than one
+    # measured and one arithmetic.  With case 12 at 0.55 this shows the correct and
+    # incorrect bands do not overlap.
+    reward = grade_trajectory(base_task, build_correct_answer_reward_floor(db_path, base_task))
+    assert_reward_vector(
+        reward,
+        execution_valid=1.0,
+        answer_correct=1.0,
+        argument_valid=1.0,
+        temporal_valid=1.0,
+        grounded=0.0,
+        format_valid=1.0,
+        efficiency=0.0,
+        required_family_coverage=0.0,
+        hard_failure=None,
+        total=0.65,
     )
 
 

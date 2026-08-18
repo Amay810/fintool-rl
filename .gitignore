@@ -15,3 +15,8 @@ data/sec_raw/
 data/sec_company_map.json
 logs/
 outputs/
+
+# Frozen evaluation-set manifests define before/after comparability and must be
+# tracked.  Negated explicitly so they survive any future broadening of data/.
+!data/evalset_manifest.json
+!data/evalset_manifest_fixture.json

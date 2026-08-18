@@ -14,6 +14,11 @@ from .baseline_report import (
     write_report,
 )
 from .database import build_fixture_snapshot, snapshot_manifest, write_manifest
+from .evalset import (
+    DEFAULT_MANIFEST_PATH,
+    build_evalset_manifest,
+    write_evalset_manifest,
+)
 from .harness import HarnessRunner, OraclePolicy, TrajectoryStore
 from .policies import OpenAICompatiblePolicy
 from .sec import (
@@ -118,6 +123,8 @@ def baseline(args: argparse.Namespace) -> None:
         store_path=args.store,
         policy_name=policy.name,
         max_steps=args.max_steps,
+        evalset_manifest_path=args.evalset_manifest,
+        allow_evalset_mismatch=args.allow_evalset_mismatch,
     )
     report["run"] = {
         "requested_tasks": len(tasks),
@@ -161,6 +168,8 @@ def analyze_baseline(args: argparse.Namespace) -> None:
         store_path=args.store,
         policy_name=policy_name,
         max_steps=args.max_steps,
+        evalset_manifest_path=args.evalset_manifest,
+        allow_evalset_mismatch=args.allow_evalset_mismatch,
     )
     write_report(report, args.report)
     if args.failure_table:
@@ -216,11 +225,51 @@ def generate_tasks(args: argparse.Namespace) -> None:
     }, indent=2, sort_keys=True))
 
 
+def freeze_evalset(args: argparse.Namespace) -> None:
+    output = Path(args.output)
+    if output.exists() and not args.overwrite:
+        raise SystemExit(
+            f"{output} already exists; refusing to re-freeze an evaluation set without "
+            "--overwrite (silently re-freezing is exactly what this manifest prevents)"
+        )
+    tasks = load_tasks(args.tasks)
+    manifest = build_evalset_manifest(
+        tasks,
+        evalset_id=args.evalset_id,
+        tasks_path=args.tasks,
+        db_path=args.db,
+    )
+    write_evalset_manifest(manifest, output)
+    print(json.dumps({
+        "evalset_id": manifest["evalset_id"],
+        "n_tasks": manifest["n_tasks"],
+        "splits": {split: digest["n_tasks"] for split, digest in manifest["splits"].items()},
+        "output": str(output),
+        "committed": "this file must be committed to git; it is the frozen identity",
+    }, indent=2, sort_keys=True))
+
+
 def sec_resolve(args: argparse.Namespace) -> None:
     download_ticker_exchange(args.ticker_file, user_agent=args.user_agent)
     mapping = resolve_universe(args.universe, args.ticker_file)
     Path(args.output).write_text(json.dumps(mapping, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"companies": len(mapping), "output": args.output}, indent=2))
+
+
+def _add_evalset_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--evalset-manifest",
+        default=str(DEFAULT_MANIFEST_PATH),
+        help="Frozen evaluation-set manifest to verify against. Verification is skipped "
+             "only when the file does not exist.",
+    )
+    parser.add_argument(
+        "--allow-evalset-mismatch",
+        action="store_true",
+        help="Proceed despite a task set that does not match the frozen manifest. "
+             "For knowing human override only; before/after comparisons produced this "
+             "way are not comparable.",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -254,6 +303,7 @@ def build_parser() -> argparse.ArgumentParser:
     base.add_argument("--max-steps", type=int, default=8)
     base.add_argument("--skip-existing", action="store_true")
     base.add_argument("--progress-every", type=int, default=10)
+    _add_evalset_arguments(base)
     base.set_defaults(func=baseline)
 
     analyze = subparsers.add_parser("analyze-baseline", help="Regrade/summarize an existing trajectory store.")
@@ -267,6 +317,7 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--difficulty", choices=["single_tool", "multi_tool", "compositional", "held_out_tool"], default="")
     analyze.add_argument("--limit", type=int, default=0)
     analyze.add_argument("--max-steps", type=int, default=8)
+    _add_evalset_arguments(analyze)
     analyze.set_defaults(func=analyze_baseline)
 
     download = subparsers.add_parser("sec-download", help="Download selected SEC Company Facts JSON files.")
@@ -300,6 +351,17 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--output", default="data/sec_company_map.json")
     resolve.add_argument("--user-agent", required=True)
     resolve.set_defaults(func=sec_resolve)
+
+    freeze = subparsers.add_parser(
+        "freeze-evalset",
+        help="Pin the identity of an evaluation set into a committed manifest.",
+    )
+    freeze.add_argument("--tasks", required=True)
+    freeze.add_argument("--db", required=True)
+    freeze.add_argument("--evalset-id", required=True, help="Human-readable id, e.g. sec-800-v1.")
+    freeze.add_argument("--output", default=str(DEFAULT_MANIFEST_PATH))
+    freeze.add_argument("--overwrite", action="store_true")
+    freeze.set_defaults(func=freeze_evalset)
     return parser
 
 
