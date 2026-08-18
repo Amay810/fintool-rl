@@ -1,0 +1,27 @@
+{
+  "as_of_time": "2025-03-31",
+  "created_at": "2026-08-18T12:11:40Z",
+  "evalset_id": "sec-800-v1",
+  "generators": [
+    "sec_snapshot_v1"
+  ],
+  "n_tasks": 800,
+  "snapshot_id": "sec-companyfacts-2025-03-31",
+  "snapshot_sha256": "191e3b0005ab3fb0a0a6f09908372832ffca82d8d25e1a2ffc2ff9ca53ac9927",
+  "splits": {
+    "dev": {
+      "n_tasks": 100,
+      "task_ids_sha256": "9042d99670ece97b737d37eed783330b85d5e99eb96073706a20d0be4282e184"
+    },
+    "test": {
+      "n_tasks": 200,
+      "task_ids_sha256": "2f27e16b58b14d12a513f81d8e195aa789e01520eefd3d33cf682d1a44ddc45d"
+    },
+    "train": {
+      "n_tasks": 500,
+      "task_ids_sha256": "044dfa2c259ce4a8a266c2efd62e8c3877432e909fbb0aaa2aaf411d16b1ba3c"
+    }
+  },
+  "tasks_file": "data/generated_sec_15_tasks.jsonl",
+  "tasks_file_sha256": "647617ad85fb1362892c67a5964b026ab5363ae3db3f85f08b18c66e1bd87be3"
+}
