@@ -20,7 +20,7 @@ Implemented and verified:
 - leakage-resistant trajectory harness, replay policy, and append-only store;
 - OpenAI-compatible policy adapter for local vLLM or hosted baselines;
 - action-parse and model-call errors recorded per trajectory without aborting a batch;
-- 33 passing tests and an 85-task fixture oracle smoke run;
+- 52 passing tests and an 85-task fixture oracle smoke run;
 - a frozen 15-company SEC snapshot with 1,015 annual facts;
 - an 800-task real-data set with exact 500/100/200 company-disjoint splits and a perfect oracle smoke run.
 
@@ -46,7 +46,7 @@ provenance remains replayable.
 
 ## Reward contract
 
-`RewardVector` reports independent dimensions:
+`RewardVector` reports eight separately recorded dimensions:
 
 - `execution_valid`;
 - `answer_correct`;
@@ -65,6 +65,23 @@ and reward-hacking cases have been audited.
 
 Golden tool paths are not treated as the only valid solution.  Required tool *families* provide diagnostic
 coverage while final numeric correctness and observation grounding remain the primary task signals.
+
+The dimensions are recorded separately but are **not** statistically independent, and `total` is not a
+safe stand-in for the vector.  An adversarial audit of `grade_trajectory()`
+(`docs/REWARD_ADVERSARIAL_REPORT.md`, `tests/test_reward_adversarial.py`) measured three limits that any
+consumer of these numbers needs to know:
+
+- `grounded` compares the reported value against the *cited observation's* scalar, never against the gold
+  answer, so it is conditionally coupled to how the answer was produced rather than independent of it: an
+  answer copied from the wrong observation is graded as grounded;
+- consequently a wrong answer can reach `total = 0.55` while a correct one can fall to `0.65`, so any
+  `total >= threshold` filter in that band selects on `answer_correct` alone and the remaining seven
+  dimensions have no effect on the selection;
+- `grounded` does not read the `provenance.parents` DAG, and `calculate_ratio` accepts an unconstrained
+  `scale`, so a trajectory that never queries the subject company can still score `1.0`.
+
+Reward semantics are deliberately frozen until model baseline distributions exist; the audit records
+current behaviour and proposes no code change.
 
 ## Quick start
 
