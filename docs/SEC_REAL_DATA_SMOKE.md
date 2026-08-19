@@ -7,7 +7,9 @@
 - Company split: 9 train / 3 dev / 3 test; companies do not cross splits.
 - Information cutoff: 2025-03-31.
 - Canonical concepts: revenue, gross profit, net income, total assets, and total liabilities where reported.
-- Raw JSON and generated runtime artifacts are retained locally and ignored by Git.
+- Raw SEC downloads in `data/sec_raw/` remain local and ignored by Git. The frozen
+  snapshot, generated task set, and snapshot manifest are committed to Git and travel
+  with the code.
 - Request contact information is not persisted in the repository or snapshot.
 
 ## Frozen snapshot
@@ -76,7 +78,7 @@ rebuilt snapshot, tools, oracles, provenance, and reward integration; it is not 
 
 ## Engineering checks
 
-- 33 automated tests pass.
+- 63 automated tests pass.
 - Baseline harness records `invalid_action` / `model_call_error` without aborting the batch;
   reward hard failures respect `terminal_reason` so format errors are not collapsed into
   `execution_failure`.
@@ -87,8 +89,9 @@ rebuilt snapshot, tools, oracles, provenance, and reward integration; it is not 
 
 ## Remaining M1 work
 
-- Run frozen baselines for a small local model, a medium local model, and a strong API model.
-  Follow [BASELINE_RUNBOOK.md](BASELINE_RUNBOOK.md); label failures with [FAILURE_TAXONOMY.md](FAILURE_TAXONOMY.md).
+- Run the frozen Qwen3-4B P1 baseline, then compare later RS-SFT / GRPO stages on the same
+  model and task identity. Follow [BASELINE_RUNBOOK.md](BASELINE_RUNBOOK.md); label failures
+  with [FAILURE_TAXONOMY.md](FAILURE_TAXONOMY.md).
 - Label baseline failures using the taxonomy in `FAILURE_TAXONOMY.md`.
 - Add held-out-tool/compositional protocols; the current benchmark primarily measures held-out-company generalization.
 - Add temporal challenge tasks with per-task cutoffs and post-cutoff facts retained in the snapshot.

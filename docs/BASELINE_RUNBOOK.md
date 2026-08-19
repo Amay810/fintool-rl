@@ -1,19 +1,21 @@
 # M1 baseline runbook
 
-This runbook freezes three prompt-only baselines on the rebuilt SEC task set before any
-RS-SFT / DPO / GRPO work.
+This runbook freezes the Qwen3-4B prompt-only P1 baseline on the rebuilt SEC task set
+before any RS-SFT / GRPO work. Later stages stay on the same base model so comparisons
+are between stages, not across model sizes or providers.
 
 ## Artifacts
 
 | Artifact | Path |
 |---|---|
-| Snapshot | `data/sec_snapshot_15.sqlite` |
-| Snapshot manifest | `data/sec_snapshot_15.manifest.json` |
-| Tasks | `data/generated_sec_15_tasks.jsonl` |
+| Snapshot (tracked) | `data/sec_snapshot_15.sqlite` |
+| Snapshot manifest (tracked) | `data/sec_snapshot_15.manifest.json` |
+| Tasks (tracked) | `data/generated_sec_15_tasks.jsonl` |
 | Failure taxonomy | [FAILURE_TAXONOMY.md](FAILURE_TAXONOMY.md) |
 
 Do not regenerate tasks mid-baseline. If the snapshot or task file changes, start a new
-store/report directory.
+store/report directory. The frozen snapshot, task set, and manifest are committed to Git;
+raw SEC downloads in `data/sec_raw/` remain local and ignored.
 
 ## Protocol
 
@@ -36,64 +38,62 @@ python -m venv .venv
 .\.venv\Scripts\pip install -e ".[dev]"
 ```
 
-Point `FINTOOL_LLM_*` at an OpenAI-compatible endpoint (vLLM, SGLang, or a hosted API).
+Point `FINTOOL_LLM_*` at an OpenAI-compatible endpoint. The P1 baseline uses Qwen3-4B;
+RS-SFT and GRPO continue from that same model.
 
 ```powershell
 $env:FINTOOL_LLM_BASE_URL = "http://127.0.0.1:8000/v1"
-$env:FINTOOL_LLM_MODEL = "Qwen3-1.7B"
+$env:FINTOOL_LLM_MODEL = "Qwen3-4B"
 $env:FINTOOL_LLM_API_KEY = ""   # set if the endpoint requires it
+```
+
+On Windows, `python -m pytest -q` may fail before collecting assertions because `%TEMP%`
+is not writable. Use a writable base directory instead; this is an environment error,
+not a test assertion failure:
+
+```powershell
+python -m pytest -q --basetemp C:\path\to\writable\pytest-temp -p no:cacheprovider
 ```
 
 ## Commands
 
-### 1) Small local model — Qwen3-1.7B
-
-```powershell
-.\scripts\run_baseline.ps1 `
-  -ModelName "Qwen3-1.7B" `
-  -BaseUrl "http://127.0.0.1:8000/v1" `
-  -Split "test"
-```
-
-Equivalent raw command:
+### Qwen3-4B P1 baseline
 
 ```powershell
 $env:FINTOOL_LLM_BASE_URL = "http://127.0.0.1:8000/v1"
-$env:FINTOOL_LLM_MODEL = "Qwen3-1.7B"
+$env:FINTOOL_LLM_MODEL = "Qwen3-4B"
 
 fintool-rl baseline `
   --db data\sec_snapshot_15.sqlite `
   --tasks data\generated_sec_15_tasks.jsonl `
   --split test `
-  --store logs\baseline_qwen3_1_7b_test.sqlite `
-  --report logs\baseline_qwen3_1_7b_test.report.json `
-  --failure-table logs\baseline_qwen3_1_7b_test.failures.jsonl `
+  --limit 0 `
+  --store logs\baseline_qwen3_4b_test.sqlite `
+  --report logs\baseline_qwen3_4b_test.report.json `
+  --failure-table logs\baseline_qwen3_4b_test.failures.jsonl `
   --skip-existing `
   --max-steps 8
 ```
 
-### 2) Medium local model — Qwen3-4B
+For a short smoke run, keep the same command and change only the explicit filter and
+limit to `--split dev --limit 20`; for the full gate use `--split test --limit 0`.
 
-```powershell
-.\scripts\run_baseline.ps1 `
-  -ModelName "Qwen3-4B" `
-  -BaseUrl "http://127.0.0.1:8001/v1" `
-  -Split "test"
+## NSCC execution flow
+
+The checked-in PBS script is `nscc/baseline.pbs`. Its vLLM server and serial baseline
+client run inside one PBS job and communicate only over localhost.
+
+```text
+虚拟机改代码 → push main
+本机 → VPN → NSCC → git pull（代码与数据一并到位）
+NSCC → qsub → 产物落盘
+本机 → 取回 report / failure table / models 响应 → 校验 → 提交
 ```
 
-### 3) Strong API model
-
-Use any OpenAI-compatible hosted model. Example:
-
-```powershell
-.\scripts\run_baseline.ps1 `
-  -ModelName "gpt-4.1-mini" `
-  -BaseUrl "https://api.openai.com/v1" `
-  -ApiKey $env:OPENAI_API_KEY `
-  -Split "test"
-```
-
-Keep the strong model on the same task split and max-steps so comparisons stay fair.
+The VM cannot validate cluster-specific execution. The PBS walltime is intentionally a
+wide placeholder: first measure elapsed time for the 20-task smoke run, then estimate
+`200/20 × smoke 实测 × 安全系数` and replace the walltime after that measurement.
+The checkpoint path is also supplied to `qsub` because it is not confirmed here.
 
 ## Resume and re-analysis
 
@@ -106,9 +106,10 @@ fintool-rl analyze-baseline `
   --db data\sec_snapshot_15.sqlite `
   --tasks data\generated_sec_15_tasks.jsonl `
   --split test `
-  --store logs\baseline_qwen3_1_7b_test.sqlite `
-  --report logs\baseline_qwen3_1_7b_test.report.json `
-  --failure-table logs\baseline_qwen3_1_7b_test.failures.jsonl
+  --limit 0 `
+  --store logs\baseline_qwen3_4b_test.sqlite `
+  --report logs\baseline_qwen3_4b_test.report.json `
+  --failure-table logs\baseline_qwen3_4b_test.failures.jsonl
 ```
 
 ## What to freeze in the write-up
@@ -123,6 +124,7 @@ From each `*.report.json`:
 
 ## Acceptance before training
 
-- 1.7B has non-zero successes and clear headroom versus 4B / strong model
+- Qwen3-4B P1 has non-zero successes and leaves measurable headroom for RS-SFT / GRPO
+- later RS-SFT / GRPO comparisons use the same Qwen3-4B base model and frozen task identity
 - failure modes are dominated by recoverable agent errors, not environment crashes
-- taxonomy version is recorded and not silently edited after model comparison
+- taxonomy version is recorded and not silently edited between stages

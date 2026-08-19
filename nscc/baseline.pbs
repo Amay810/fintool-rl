@@ -1,0 +1,151 @@
+#!/bin/bash
+#PBS -N fintool-qwen3-4b-baseline
+#PBS -q normal
+#PBS -P personal
+#PBS -l select=1:ncpus=16:ngpus=4:mem=110gb
+#PBS -l walltime=24:00:00
+#PBS -j oe
+
+# Serves Qwen3-4B with vLLM on the compute node and runs the frozen baseline
+# against it inside the same job. The login node only submits this file.
+#
+# Smoke:
+#   qsub -v MODEL=/absolute/path/to/Qwen3-4B,SPLIT=dev,LIMIT=20 nscc/baseline.pbs
+# Full test split:
+#   qsub -v MODEL=/absolute/path/to/Qwen3-4B,SPLIT=test,LIMIT=0 nscc/baseline.pbs
+#
+# MODEL   absolute path to the Qwen3-4B checkpoint; the path is intentionally
+#         supplied by the submitter because it cannot be confirmed in this VM.
+# SPLIT   dev for smoke or test for the frozen full evaluation split.
+# LIMIT   20 for smoke or 0 for the full selected split.
+#
+# The 24-hour walltime is a deliberately generous, unmeasured placeholder.
+# Calibrate it after measuring one smoke task: 200/20 * smoke_seconds * safety
+# factor. Keep the safety factor explicit when replacing this PBS value.
+# Runtime needs no external network: Git-tracked data is already present and the
+# only service call is to the vLLM endpoint on localhost.
+# PBS/environment lines are inherited from the historical nscc/baseline.pbs at
+# commit 8481959; only the job name, walltime, and execution commands differ.
+
+set -euo pipefail
+
+PROJECT=/scratch/users/ntu/s250045/fintool-rl
+ENV=/scratch/users/ntu/s250045/conda-envs/fintool-vllm0102
+
+cd "$PROJECT"
+module load miniforge3/25.3.1
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$ENV"
+
+export PYTHONNOUSERSITE=1
+export HF_HOME=/scratch/users/ntu/s250045/hf-cache
+
+: "${MODEL:?MODEL must be the absolute path to the Qwen3-4B checkpoint}"
+: "${SPLIT:?Set SPLIT=dev for smoke or SPLIT=test for the full run}"
+: "${LIMIT:?Set LIMIT=20 for smoke or LIMIT=0 for the full run}"
+
+case "$SPLIT" in
+  dev|test) ;;
+  *) echo "SPLIT must be dev or test, got: $SPLIT" >&2; exit 2 ;;
+esac
+case "$LIMIT" in
+  ''|*[!0-9]*) echo "LIMIT must be a non-negative integer, got: $LIMIT" >&2; exit 2 ;;
+esac
+
+MODEL_NAME=Qwen3-4B
+PORT=8123
+DB=data/sec_snapshot_15.sqlite
+TASKS=data/generated_sec_15_tasks.jsonl
+OUT="logs/qwen3_4b_${SPLIT}"
+MODELS_RESPONSE="${OUT}.models.json"
+VLLM_LOG="${OUT}.vllm.log"
+mkdir -p logs
+
+echo "PROJECT=$PROJECT"
+echo "CONDA_PREFIX=$CONDA_PREFIX"
+echo "MODEL=$MODEL"
+echo "MODEL_NAME=$MODEL_NAME"
+echo "SPLIT=$SPLIT"
+echo "LIMIT=$LIMIT"
+which python
+which fintool-rl
+which vllm
+python -c "import torch, vllm; print('torch:', torch.__version__, 'CUDA:', torch.version.cuda, 'vLLM:', vllm.__version__)"
+nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+
+test -f "$MODEL/config.json"
+test -f "$DB"
+test -f "$TASKS"
+
+vllm serve "$MODEL" \
+  --served-model-name "$MODEL_NAME" \
+  --host 127.0.0.1 \
+  --port "$PORT" \
+  --data-parallel-size 4 \
+  --tensor-parallel-size 1 \
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes \
+  --max-model-len 16384 \
+  > "$VLLM_LOG" 2>&1 &
+VLLM_PID=$!
+
+cleanup() {
+  exit_status=$?
+  trap - EXIT
+  if kill -0 "$VLLM_PID" 2>/dev/null; then
+    if kill "$VLLM_PID" 2>/dev/null; then
+      :
+    fi
+  fi
+  if wait "$VLLM_PID" 2>/dev/null; then
+    :
+  else
+    vllm_status=$?
+    if [ "$vllm_status" -ne 143 ]; then
+      echo "vLLM exited during cleanup with status $vllm_status" >&2
+    fi
+  fi
+  exit "$exit_status"
+}
+trap cleanup EXIT
+
+MODELS_URL="http://127.0.0.1:${PORT}/v1/models"
+ready=0
+for _ in $(seq 1 180); do
+  if python -c 'import sys, urllib.request; urllib.request.urlopen(sys.argv[1], timeout=2)' "$MODELS_URL" >/dev/null 2>&1; then
+    ready=1
+    break
+  fi
+  if ! kill -0 "$VLLM_PID" 2>/dev/null; then
+    echo "vLLM exited before becoming ready" >&2
+    tail -n 200 "$VLLM_LOG"
+    exit 1
+  fi
+  sleep 10
+done
+if [ "$ready" -ne 1 ]; then
+  echo "vLLM health check timed out: $MODELS_URL" >&2
+  tail -n 200 "$VLLM_LOG"
+  exit 1
+fi
+
+# Preserve the raw server response separately from the requested model values
+# recorded by baseline_report.py. Do not infer behavior from this response here.
+python -c 'import sys, urllib.request; response = urllib.request.urlopen(sys.argv[1], timeout=10); sys.stdout.buffer.write(response.read())' \
+  "$MODELS_URL" > "$MODELS_RESPONSE"
+test -s "$MODELS_RESPONSE"
+
+export FINTOOL_LLM_BASE_URL="http://127.0.0.1:${PORT}/v1"
+export FINTOOL_LLM_MODEL="$MODEL_NAME"
+export FINTOOL_LLM_API_KEY=""
+
+fintool-rl baseline \
+  --db "$DB" \
+  --tasks "$TASKS" \
+  --split "$SPLIT" \
+  --limit "$LIMIT" \
+  --store "${OUT}.sqlite" \
+  --report "${OUT}.report.json" \
+  --failure-table "${OUT}.failures.jsonl" \
+  --skip-existing \
+  --max-steps 8
