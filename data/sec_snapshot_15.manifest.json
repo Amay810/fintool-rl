@@ -1,0 +1,17 @@
+{
+  "metadata": {
+    "as_of_time": "2025-03-31",
+    "data_class": "sec_companyfacts",
+    "schema_version": "1",
+    "snapshot_id": "sec-companyfacts-2025-03-31",
+    "upstream": "https://data.sec.gov/api/xbrl/companyfacts/"
+  },
+  "path": "sec_snapshot_15.sqlite",
+  "row_counts": {
+    "companies": 15,
+    "daily_prices": 0,
+    "financial_facts": 1015,
+    "market_indices": 0
+  },
+  "sha256": "191e3b0005ab3fb0a0a6f09908372832ffca82d8d25e1a2ffc2ff9ca53ac9927"
+}
