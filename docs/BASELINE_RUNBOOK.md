@@ -90,6 +90,36 @@ NSCC → qsub → 产物落盘
 本机 → 取回 report / failure table / models 响应 → 校验 → 提交
 ```
 
+### NSCC inference environment
+
+The verified NSCC inference environment is:
+
+| Item | Value |
+|---|---|
+| conda environment | `/scratch/users/ntu/s250045/conda-envs/fintool-vllm0102` |
+| module | `miniforge3/25.3.1` |
+| vLLM | `0.10.2` |
+| torch | `2.8.0+cu128` |
+| transformers | `>=4.51,<5` |
+
+Keep the tokenizer dependency below v5; if rebuilding the environment, use:
+
+```bash
+pip install 'transformers>=4.51.0,<5.0'
+```
+
+Transformers 5.x changed a tokenizer interface still used by vLLM 0.10.2 and caused
+`AttributeError: Qwen2Tokenizer has no attribute all_special_tokens_extended` on NSCC.
+PBS may also inject UUID-valued GPU visibility; the script maps it to numeric CUDA
+device IDs before starting vLLM, which fixes the vLLM 0.10.x error
+`ValueError: invalid literal for int() with base 10: 'GPU-...'`.
+
+`MODEL` is the actual checkpoint path, for example
+`/scratch/users/ntu/s250045/models/Qwen3-4B-Instruct-2507`. `MODEL_NAME=Qwen3-4B`,
+`--served-model-name "$MODEL_NAME"`, and `FINTOOL_LLM_MODEL=Qwen3-4B` are the
+OpenAI-compatible endpoint name. Thus `/v1/models` may report id `Qwen3-4B` while its
+root points to the `Qwen3-4B-Instruct-2507` checkpoint; reports must record both.
+
 The VM cannot validate cluster-specific execution. The PBS walltime is intentionally a
 wide placeholder: first measure elapsed time for the 20-task smoke run, then estimate
 `200/20 × smoke 实测 × 安全系数` and replace the walltime after that measurement.

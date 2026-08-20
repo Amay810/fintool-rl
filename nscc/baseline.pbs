@@ -77,6 +77,18 @@ test -f "$MODEL/config.json"
 test -f "$DB"
 test -f "$TASKS"
 
+# PBS may inject GPU UUIDs; vLLM 0.10.x only accepts numeric CUDA_VISIBLE_DEVICES.
+echo "PBS CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
+NGPUS="${PBS_NGPUS:-4}"
+if [ "$NGPUS" -ge 4 ]; then
+  export CUDA_VISIBLE_DEVICES=0,1,2,3
+elif [ "$NGPUS" -ge 2 ]; then
+  export CUDA_VISIBLE_DEVICES=0,1
+else
+  export CUDA_VISIBLE_DEVICES=0
+fi
+echo "Using CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+
 vllm serve "$MODEL" \
   --served-model-name "$MODEL_NAME" \
   --host 127.0.0.1 \
