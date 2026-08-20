@@ -1,0 +1,458 @@
+{
+  "by_difficulty": {
+    "compositional": {
+      "answer_accuracy": 0.0,
+      "grounded_rate": 0.0,
+      "hard_failures": {
+        "invalid_answer_format": 25,
+        "none": 3
+      },
+      "mean_reward": 0.034821,
+      "n": 28,
+      "primary_failures": {
+        "invalid_answer_format": 25,
+        "wrong_value": 3
+      },
+      "success_rate": 0.0
+    },
+    "multi_tool": {
+      "answer_accuracy": 0.0,
+      "grounded_rate": 0.0,
+      "hard_failures": {
+        "invalid_answer_format": 44
+      },
+      "mean_reward": 0.0,
+      "n": 44,
+      "primary_failures": {
+        "invalid_answer_format": 44
+      },
+      "success_rate": 0.0
+    },
+    "single_tool": {
+      "answer_accuracy": 0.964286,
+      "grounded_rate": 0.964286,
+      "hard_failures": {
+        "none": 28
+      },
+      "mean_reward": 0.9125,
+      "n": 28,
+      "primary_failures": {
+        "soft_failure": 17,
+        "success": 10,
+        "wrong_value": 1
+      },
+      "success_rate": 0.357143
+    }
+  },
+  "by_split": {
+    "dev": {
+      "answer_accuracy": 0.27,
+      "grounded_rate": 0.27,
+      "hard_failures": {
+        "invalid_answer_format": 69,
+        "none": 31
+      },
+      "mean_reward": 0.26525,
+      "n": 100,
+      "primary_failures": {
+        "invalid_answer_format": 69,
+        "soft_failure": 17,
+        "success": 10,
+        "wrong_value": 4
+      },
+      "success_rate": 0.1
+    }
+  },
+  "by_template": {
+    "financial_fact_lookup": {
+      "answer_accuracy": 0.964286,
+      "grounded_rate": 0.964286,
+      "hard_failures": {
+        "none": 28
+      },
+      "mean_reward": 0.9125,
+      "n": 28,
+      "primary_failures": {
+        "soft_failure": 17,
+        "success": 10,
+        "wrong_value": 1
+      },
+      "success_rate": 0.357143
+    },
+    "gross_margin": {
+      "answer_accuracy": 0.0,
+      "grounded_rate": 0.0,
+      "hard_failures": {
+        "invalid_answer_format": 17
+      },
+      "mean_reward": 0.0,
+      "n": 17,
+      "primary_failures": {
+        "invalid_answer_format": 17
+      },
+      "success_rate": 0.0
+    },
+    "liabilities_to_assets": {
+      "answer_accuracy": 0.0,
+      "grounded_rate": 0.0,
+      "hard_failures": {
+        "invalid_answer_format": 25,
+        "none": 3
+      },
+      "mean_reward": 0.034821,
+      "n": 28,
+      "primary_failures": {
+        "invalid_answer_format": 25,
+        "wrong_value": 3
+      },
+      "success_rate": 0.0
+    },
+    "year_over_year_growth": {
+      "answer_accuracy": 0.0,
+      "grounded_rate": 0.0,
+      "hard_failures": {
+        "invalid_answer_format": 27
+      },
+      "mean_reward": 0.0,
+      "n": 27,
+      "primary_failures": {
+        "invalid_answer_format": 27
+      },
+      "success_rate": 0.0
+    }
+  },
+  "failure_examples": {
+    "invalid_answer_format": [
+      {
+        "evidence": {
+          "difficulty": "multi_tool",
+          "hard_failure": "invalid_answer_format",
+          "n_tool_calls": 1,
+          "split": "dev",
+          "template_family": "year_over_year_growth",
+          "terminal_reason": "invalid_action"
+        },
+        "expected_answer": {
+          "tolerance": 0.0001,
+          "unit": "percent",
+          "value": -44.76306967473045
+        },
+        "final_answer": null,
+        "hard_failure": "invalid_answer_format",
+        "secondary": [],
+        "split": "dev",
+        "symbol": "MSFT",
+        "task_id": "task_005357884dcba9e2",
+        "template_family": "year_over_year_growth",
+        "terminal_reason": "invalid_action"
+      },
+      {
+        "evidence": {
+          "difficulty": "multi_tool",
+          "hard_failure": "invalid_answer_format",
+          "n_tool_calls": 1,
+          "split": "dev",
+          "template_family": "year_over_year_growth",
+          "terminal_reason": "invalid_action"
+        },
+        "expected_answer": {
+          "tolerance": 0.0001,
+          "unit": "percent",
+          "value": 195.32917532917534
+        },
+        "final_answer": null,
+        "hard_failure": "invalid_answer_format",
+        "secondary": [],
+        "split": "dev",
+        "symbol": "PFE",
+        "task_id": "task_024f34ac790629d3",
+        "template_family": "year_over_year_growth",
+        "terminal_reason": "invalid_action"
+      },
+      {
+        "evidence": {
+          "difficulty": "multi_tool",
+          "hard_failure": "invalid_answer_format",
+          "n_tool_calls": 1,
+          "split": "dev",
+          "template_family": "year_over_year_growth",
+          "terminal_reason": "invalid_action"
+        },
+        "expected_answer": {
+          "tolerance": 0.0001,
+          "unit": "percent",
+          "value": 11.937455988733117
+        },
+        "final_answer": null,
+        "hard_failure": "invalid_answer_format",
+        "secondary": [],
+        "split": "dev",
+        "symbol": "MSFT",
+        "task_id": "task_03eba766ffde8199",
+        "template_family": "year_over_year_growth",
+        "terminal_reason": "invalid_action"
+      }
+    ],
+    "soft_failure": [
+      {
+        "evidence": {
+          "difficulty": "single_tool",
+          "hard_failure": null,
+          "n_tool_calls": 2,
+          "split": "dev",
+          "template_family": "financial_fact_lookup",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 1e-06,
+          "unit": "USD_million",
+          "value": 14982.0
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_fe63270d9920d661dab6"
+          ],
+          "unit": "USD_million",
+          "value": 14982
+        },
+        "hard_failure": null,
+        "secondary": [
+          "inefficient"
+        ],
+        "split": "dev",
+        "symbol": "BAC",
+        "task_id": "task_076810c4ff41a5b9",
+        "template_family": "financial_fact_lookup",
+        "terminal_reason": "answered"
+      },
+      {
+        "evidence": {
+          "difficulty": "single_tool",
+          "hard_failure": null,
+          "n_tool_calls": 2,
+          "split": "dev",
+          "template_family": "financial_fact_lookup",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 1e-06,
+          "unit": "USD_million",
+          "value": 93454.0
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_9ec37f542ae540b8c80e"
+          ],
+          "unit": "USD_million",
+          "value": 93454
+        },
+        "hard_failure": null,
+        "secondary": [
+          "inefficient"
+        ],
+        "split": "dev",
+        "symbol": "BAC",
+        "task_id": "task_086d2ff55bddb797",
+        "template_family": "financial_fact_lookup",
+        "terminal_reason": "answered"
+      },
+      {
+        "evidence": {
+          "difficulty": "single_tool",
+          "hard_failure": null,
+          "n_tool_calls": 2,
+          "split": "dev",
+          "template_family": "financial_fact_lookup",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 1e-06,
+          "unit": "USD_million",
+          "value": 62484.0
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_27ad3a55862b715a9148"
+          ],
+          "unit": "USD_million",
+          "value": 62484
+        },
+        "hard_failure": null,
+        "secondary": [
+          "inefficient"
+        ],
+        "split": "dev",
+        "symbol": "MSFT",
+        "task_id": "task_1539835632db1815",
+        "template_family": "financial_fact_lookup",
+        "terminal_reason": "answered"
+      }
+    ],
+    "wrong_value": [
+      {
+        "evidence": {
+          "difficulty": "compositional",
+          "hard_failure": null,
+          "n_tool_calls": 2,
+          "split": "dev",
+          "template_family": "liabilities_to_assets",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 0.0001,
+          "unit": "percent",
+          "value": 89.92242072418803
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_6c9b990d789557914d7a",
+            "obs_722cf76ebd8ab6b17d77"
+          ],
+          "unit": "percent",
+          "value": 0.85
+        },
+        "hard_failure": null,
+        "secondary": [
+          "missing_required_families"
+        ],
+        "split": "dev",
+        "symbol": "BAC",
+        "task_id": "task_06a05897a54e7a36",
+        "template_family": "liabilities_to_assets",
+        "terminal_reason": "answered"
+      },
+      {
+        "evidence": {
+          "difficulty": "single_tool",
+          "hard_failure": null,
+          "n_tool_calls": 2,
+          "split": "dev",
+          "template_family": "financial_fact_lookup",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 1e-06,
+          "unit": "USD_million",
+          "value": -2238.0
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_9a1827e770a698a82c4c"
+          ],
+          "unit": "USD_million",
+          "value": 2238
+        },
+        "hard_failure": null,
+        "secondary": [
+          "inefficient"
+        ],
+        "split": "dev",
+        "symbol": "BAC",
+        "task_id": "task_23f94d41f1ae5ddb",
+        "template_family": "financial_fact_lookup",
+        "terminal_reason": "answered"
+      },
+      {
+        "evidence": {
+          "difficulty": "compositional",
+          "hard_failure": null,
+          "n_tool_calls": 2,
+          "split": "dev",
+          "template_family": "liabilities_to_assets",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 0.0001,
+          "unit": "percent",
+          "value": 89.27788290721972
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_6c9b990d789557914d7a",
+            "obs_722cf76ebd8ab6b17d77"
+          ],
+          "unit": "percent",
+          "value": 0.85
+        },
+        "hard_failure": null,
+        "secondary": [
+          "missing_required_families"
+        ],
+        "split": "dev",
+        "symbol": "BAC",
+        "task_id": "task_3667b807a9742f8b",
+        "template_family": "liabilities_to_assets",
+        "terminal_reason": "answered"
+      }
+    ]
+  },
+  "failure_taxonomy": {
+    "n": 100,
+    "primary": {
+      "invalid_answer_format": 69,
+      "soft_failure": 17,
+      "success": 10,
+      "wrong_value": 4
+    },
+    "secondary": {
+      "inefficient": 18,
+      "missing_required_families": 3
+    },
+    "success_rate": 0.1,
+    "taxonomy_version": "m1-baseline-v1"
+  },
+  "n_tasks_available": 100,
+  "n_trajectories": 100,
+  "overall": {
+    "answer_accuracy": 0.27,
+    "grounded_rate": 0.27,
+    "hard_failures": {
+      "invalid_answer_format": 69,
+      "none": 31
+    },
+    "mean_reward": 0.26525,
+    "n": 100,
+    "primary_failures": {
+      "invalid_answer_format": 69,
+      "soft_failure": 17,
+      "success": 10,
+      "wrong_value": 4
+    },
+    "success_rate": 0.1
+  },
+  "protocol": {
+    "as_of_time": "2025-03-31",
+    "db_path": "data/sec_snapshot_15.sqlite",
+    "evalset": {
+      "evalset_id": "sec-800-v1",
+      "manifest_path": "data/evalset_manifest.json",
+      "manifest_snapshot_sha256": "191e3b0005ab3fb0a0a6f09908372832ffca82d8d25e1a2ffc2ff9ca53ac9927",
+      "manifest_tasks_file_sha256": "647617ad85fb1362892c67a5964b026ab5363ae3db3f85f08b18c66e1bd87be3",
+      "n_tasks": 800,
+      "verified": true,
+      "verified_splits": {
+        "dev": "9042d99670ece97b737d37eed783330b85d5e99eb96073706a20d0be4282e184",
+        "test": "2f27e16b58b14d12a513f81d8e195aa789e01520eefd3d33cf682d1a44ddc45d",
+        "train": "044dfa2c259ce4a8a266c2efd62e8c3877432e909fbb0aaa2aaf411d16b1ba3c"
+      }
+    },
+    "max_steps": 8,
+    "model_env": {
+      "FINTOOL_LLM_BASE_URL": "http://127.0.0.1:8123/v1",
+      "FINTOOL_LLM_MODEL": "Qwen3-4B"
+    },
+    "name": "fintool-rl-m1-baseline",
+    "policy_name": "OpenAICompatiblePolicy:Qwen3-4B",
+    "snapshot_id": "sec-companyfacts-2025-03-31",
+    "snapshot_sha256": "191e3b0005ab3fb0a0a6f09908372832ffca82d8d25e1a2ffc2ff9ca53ac9927",
+    "store_path": "logs/qwen3_4b_dev.sqlite",
+    "tasks_path": "data/generated_sec_15_tasks.jsonl",
+    "tasks_sha256": "2fafa2fb75113e3d289d8d1b68f22446740697e7278c04c8fcd10f01266e5577"
+  },
+  "run": {
+    "already_done": 20,
+    "newly_graded": 80,
+    "requested_tasks": 100,
+    "skipped_existing": true
+  }
+}
