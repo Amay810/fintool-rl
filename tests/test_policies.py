@@ -6,7 +6,13 @@ import pytest
 
 from fintool_rl.contracts import Trajectory
 from fintool_rl.harness import AgentObservation, HarnessRunner
-from fintool_rl.policies import ActionParseError, JsonActionPolicy, ModelCallError, parse_action
+from fintool_rl.policies import (
+    SYSTEM_PROMPT,
+    ActionParseError,
+    JsonActionPolicy,
+    ModelCallError,
+    parse_action,
+)
 from fintool_rl.reward import grade_trajectory
 
 
@@ -26,6 +32,19 @@ def test_parse_rejects_non_json_or_ambiguous_payloads():
     assert "I think the answer is 4" in exc_info.value.raw_text
     with pytest.raises(ActionParseError):
         parse_action('{"kind":"tool","tool_name":4,"arguments":{}}')
+
+
+def test_system_prompt_states_protocol_v1_action_contract():
+    prompt = SYSTEM_PROMPT.lower()
+
+    assert "exactly one action" in prompt
+    assert "wait for the environment" in prompt
+    assert "observation" in prompt
+    assert "never emit multiple json objects" in prompt
+    assert "jsonl" in prompt
+    assert 'the tool-action key is exactly "arguments"' in prompt
+    assert 'do not use "tool_arguments"' in prompt
+    assert "no markdown" in prompt
 
 
 def test_json_policy_prompt_contains_only_public_task_and_observations():
