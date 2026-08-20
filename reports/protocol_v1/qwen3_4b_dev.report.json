@@ -1,0 +1,523 @@
+{
+  "by_difficulty": {
+    "compositional": {
+      "answer_accuracy": 0.0,
+      "grounded_rate": 0.0,
+      "hard_failures": {
+        "none": 28
+      },
+      "mean_reward": 0.292857,
+      "n": 28,
+      "primary_failures": {
+        "wrong_value": 28
+      },
+      "success_rate": 0.0
+    },
+    "multi_tool": {
+      "answer_accuracy": 0.0,
+      "grounded_rate": 0.0,
+      "hard_failures": {
+        "execution_failure": 17,
+        "none": 27
+      },
+      "mean_reward": 0.178977,
+      "n": 44,
+      "primary_failures": {
+        "max_steps": 17,
+        "wrong_unit": 1,
+        "wrong_value": 26
+      },
+      "success_rate": 0.0
+    },
+    "single_tool": {
+      "answer_accuracy": 1.0,
+      "grounded_rate": 1.0,
+      "hard_failures": {
+        "none": 28
+      },
+      "mean_reward": 0.9,
+      "n": 28,
+      "primary_failures": {
+        "soft_failure": 28
+      },
+      "success_rate": 0.0
+    }
+  },
+  "by_split": {
+    "dev": {
+      "answer_accuracy": 0.28,
+      "grounded_rate": 0.28,
+      "hard_failures": {
+        "execution_failure": 17,
+        "none": 83
+      },
+      "mean_reward": 0.41275,
+      "n": 100,
+      "primary_failures": {
+        "max_steps": 17,
+        "soft_failure": 28,
+        "wrong_unit": 1,
+        "wrong_value": 54
+      },
+      "success_rate": 0.0
+    }
+  },
+  "by_template": {
+    "financial_fact_lookup": {
+      "answer_accuracy": 1.0,
+      "grounded_rate": 1.0,
+      "hard_failures": {
+        "none": 28
+      },
+      "mean_reward": 0.9,
+      "n": 28,
+      "primary_failures": {
+        "soft_failure": 28
+      },
+      "success_rate": 0.0
+    },
+    "gross_margin": {
+      "answer_accuracy": 0.0,
+      "grounded_rate": 0.0,
+      "hard_failures": {
+        "execution_failure": 17
+      },
+      "mean_reward": 0.0,
+      "n": 17,
+      "primary_failures": {
+        "max_steps": 17
+      },
+      "success_rate": 0.0
+    },
+    "liabilities_to_assets": {
+      "answer_accuracy": 0.0,
+      "grounded_rate": 0.0,
+      "hard_failures": {
+        "none": 28
+      },
+      "mean_reward": 0.292857,
+      "n": 28,
+      "primary_failures": {
+        "wrong_value": 28
+      },
+      "success_rate": 0.0
+    },
+    "year_over_year_growth": {
+      "answer_accuracy": 0.0,
+      "grounded_rate": 0.0,
+      "hard_failures": {
+        "none": 27
+      },
+      "mean_reward": 0.291667,
+      "n": 27,
+      "primary_failures": {
+        "wrong_unit": 1,
+        "wrong_value": 26
+      },
+      "success_rate": 0.0
+    }
+  },
+  "failure_examples": {
+    "max_steps": [
+      {
+        "evidence": {
+          "difficulty": "multi_tool",
+          "hard_failure": "execution_failure",
+          "n_tool_calls": 9,
+          "split": "dev",
+          "template_family": "gross_margin",
+          "terminal_reason": "max_steps",
+          "tool_errors": [
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found"
+          ]
+        },
+        "expected_answer": {
+          "tolerance": 0.0001,
+          "unit": "percent",
+          "value": 64.6954477452447
+        },
+        "final_answer": null,
+        "hard_failure": "execution_failure",
+        "secondary": [],
+        "split": "dev",
+        "symbol": "MSFT",
+        "task_id": "task_3b5b232c3cbbd8ee",
+        "template_family": "gross_margin",
+        "terminal_reason": "max_steps"
+      },
+      {
+        "evidence": {
+          "difficulty": "multi_tool",
+          "hard_failure": "execution_failure",
+          "n_tool_calls": 9,
+          "split": "dev",
+          "template_family": "gross_margin",
+          "terminal_reason": "max_steps",
+          "tool_errors": [
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found"
+          ]
+        },
+        "expected_answer": {
+          "tolerance": 0.0001,
+          "unit": "percent",
+          "value": 77.7290079064381
+        },
+        "final_answer": null,
+        "hard_failure": "execution_failure",
+        "secondary": [],
+        "split": "dev",
+        "symbol": "MSFT",
+        "task_id": "task_501ed6c4f8689183",
+        "template_family": "gross_margin",
+        "terminal_reason": "max_steps"
+      },
+      {
+        "evidence": {
+          "difficulty": "multi_tool",
+          "hard_failure": "execution_failure",
+          "n_tool_calls": 9,
+          "split": "dev",
+          "template_family": "gross_margin",
+          "terminal_reason": "max_steps",
+          "tool_errors": [
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found",
+            "periods_not_found"
+          ]
+        },
+        "expected_answer": {
+          "tolerance": 0.0001,
+          "unit": "percent",
+          "value": 65.2473722363175
+        },
+        "final_answer": null,
+        "hard_failure": "execution_failure",
+        "secondary": [],
+        "split": "dev",
+        "symbol": "MSFT",
+        "task_id": "task_55f1e910f62253fa",
+        "template_family": "gross_margin",
+        "terminal_reason": "max_steps"
+      }
+    ],
+    "soft_failure": [
+      {
+        "evidence": {
+          "difficulty": "single_tool",
+          "hard_failure": null,
+          "n_tool_calls": 2,
+          "split": "dev",
+          "template_family": "financial_fact_lookup",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 1e-06,
+          "unit": "USD_million",
+          "value": 98581.0
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_140f2f8f8a3caaa65f76"
+          ],
+          "unit": "USD_million",
+          "value": 98581
+        },
+        "hard_failure": null,
+        "secondary": [
+          "inefficient"
+        ],
+        "split": "dev",
+        "symbol": "BAC",
+        "task_id": "task_02fd433b534d45aa",
+        "template_family": "financial_fact_lookup",
+        "terminal_reason": "answered"
+      },
+      {
+        "evidence": {
+          "difficulty": "single_tool",
+          "hard_failure": null,
+          "n_tool_calls": 3,
+          "split": "dev",
+          "template_family": "financial_fact_lookup",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 1e-06,
+          "unit": "USD_million",
+          "value": 14982.0
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_fe63270d9920d661dab6"
+          ],
+          "unit": "USD_million",
+          "value": 14982
+        },
+        "hard_failure": null,
+        "secondary": [
+          "inefficient"
+        ],
+        "split": "dev",
+        "symbol": "BAC",
+        "task_id": "task_076810c4ff41a5b9",
+        "template_family": "financial_fact_lookup",
+        "terminal_reason": "answered"
+      },
+      {
+        "evidence": {
+          "difficulty": "single_tool",
+          "hard_failure": null,
+          "n_tool_calls": 2,
+          "split": "dev",
+          "template_family": "financial_fact_lookup",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 1e-06,
+          "unit": "USD_million",
+          "value": 93454.0
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_9ec37f542ae540b8c80e"
+          ],
+          "unit": "USD_million",
+          "value": 93454
+        },
+        "hard_failure": null,
+        "secondary": [
+          "inefficient"
+        ],
+        "split": "dev",
+        "symbol": "BAC",
+        "task_id": "task_086d2ff55bddb797",
+        "template_family": "financial_fact_lookup",
+        "terminal_reason": "answered"
+      }
+    ],
+    "wrong_unit": [
+      {
+        "evidence": {
+          "difficulty": "multi_tool",
+          "hard_failure": null,
+          "n_tool_calls": 4,
+          "split": "dev",
+          "template_family": "year_over_year_growth",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 0.0001,
+          "unit": "percent",
+          "value": -3.4100169976948336
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_a8a58f6093cc8bd7d67e",
+            "obs_f003caf6a6ee055b39db"
+          ],
+          "unit": "USD_million",
+          "value": -2929.0
+        },
+        "hard_failure": null,
+        "secondary": [
+          "unit_mismatch"
+        ],
+        "split": "dev",
+        "symbol": "BAC",
+        "task_id": "task_1b3e5d9842e79621",
+        "template_family": "year_over_year_growth",
+        "terminal_reason": "answered"
+      }
+    ],
+    "wrong_value": [
+      {
+        "evidence": {
+          "difficulty": "multi_tool",
+          "hard_failure": null,
+          "n_tool_calls": 4,
+          "split": "dev",
+          "template_family": "year_over_year_growth",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 0.0001,
+          "unit": "percent",
+          "value": -44.76306967473045
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_9ce75e3a39a1798f08a0",
+            "obs_eeeb48ecf064fc499b21"
+          ],
+          "unit": "percent",
+          "value": -44.81
+        },
+        "hard_failure": null,
+        "secondary": [
+          "missing_required_families",
+          "inefficient"
+        ],
+        "split": "dev",
+        "symbol": "MSFT",
+        "task_id": "task_005357884dcba9e2",
+        "template_family": "year_over_year_growth",
+        "terminal_reason": "answered"
+      },
+      {
+        "evidence": {
+          "difficulty": "multi_tool",
+          "hard_failure": null,
+          "n_tool_calls": 4,
+          "split": "dev",
+          "template_family": "year_over_year_growth",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 0.0001,
+          "unit": "percent",
+          "value": 195.32917532917534
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_85095c25c71f8113606e",
+            "obs_ee76bfb60c8b7d21aed7"
+          ],
+          "unit": "percent",
+          "value": 180.9
+        },
+        "hard_failure": null,
+        "secondary": [
+          "missing_required_families",
+          "inefficient"
+        ],
+        "split": "dev",
+        "symbol": "PFE",
+        "task_id": "task_024f34ac790629d3",
+        "template_family": "year_over_year_growth",
+        "terminal_reason": "answered"
+      },
+      {
+        "evidence": {
+          "difficulty": "multi_tool",
+          "hard_failure": null,
+          "n_tool_calls": 4,
+          "split": "dev",
+          "template_family": "year_over_year_growth",
+          "terminal_reason": "answered"
+        },
+        "expected_answer": {
+          "tolerance": 0.0001,
+          "unit": "percent",
+          "value": 11.937455988733117
+        },
+        "final_answer": {
+          "observation_ids": [
+            "obs_27ad3a55862b715a9148",
+            "obs_218fab5d0addb264560f"
+          ],
+          "unit": "percent",
+          "value": 0.1223
+        },
+        "hard_failure": null,
+        "secondary": [
+          "missing_required_families",
+          "inefficient"
+        ],
+        "split": "dev",
+        "symbol": "MSFT",
+        "task_id": "task_03eba766ffde8199",
+        "template_family": "year_over_year_growth",
+        "terminal_reason": "answered"
+      }
+    ]
+  },
+  "failure_taxonomy": {
+    "n": 100,
+    "primary": {
+      "max_steps": 17,
+      "soft_failure": 28,
+      "wrong_unit": 1,
+      "wrong_value": 54
+    },
+    "secondary": {
+      "inefficient": 81,
+      "missing_required_families": 54,
+      "unit_mismatch": 1
+    },
+    "success_rate": 0.0,
+    "taxonomy_version": "m1-baseline-v1"
+  },
+  "n_tasks_available": 100,
+  "n_trajectories": 100,
+  "overall": {
+    "answer_accuracy": 0.28,
+    "grounded_rate": 0.28,
+    "hard_failures": {
+      "execution_failure": 17,
+      "none": 83
+    },
+    "mean_reward": 0.41275,
+    "n": 100,
+    "primary_failures": {
+      "max_steps": 17,
+      "soft_failure": 28,
+      "wrong_unit": 1,
+      "wrong_value": 54
+    },
+    "success_rate": 0.0
+  },
+  "protocol": {
+    "as_of_time": "2025-03-31",
+    "db_path": "data/sec_snapshot_15.sqlite",
+    "evalset": {
+      "evalset_id": "sec-800-v1",
+      "manifest_path": "data/evalset_manifest.json",
+      "manifest_snapshot_sha256": "191e3b0005ab3fb0a0a6f09908372832ffca82d8d25e1a2ffc2ff9ca53ac9927",
+      "manifest_tasks_file_sha256": "647617ad85fb1362892c67a5964b026ab5363ae3db3f85f08b18c66e1bd87be3",
+      "n_tasks": 800,
+      "verified": true,
+      "verified_splits": {
+        "dev": "9042d99670ece97b737d37eed783330b85d5e99eb96073706a20d0be4282e184",
+        "test": "2f27e16b58b14d12a513f81d8e195aa789e01520eefd3d33cf682d1a44ddc45d",
+        "train": "044dfa2c259ce4a8a266c2efd62e8c3877432e909fbb0aaa2aaf411d16b1ba3c"
+      }
+    },
+    "max_steps": 8,
+    "model_env": {
+      "FINTOOL_LLM_BASE_URL": "http://127.0.0.1:8123/v1",
+      "FINTOOL_LLM_MODEL": "Qwen3-4B"
+    },
+    "name": "fintool-rl-m1-baseline",
+    "policy_name": "OpenAICompatiblePolicy:Qwen3-4B",
+    "snapshot_id": "sec-companyfacts-2025-03-31",
+    "snapshot_sha256": "191e3b0005ab3fb0a0a6f09908372832ffca82d8d25e1a2ffc2ff9ca53ac9927",
+    "store_path": "logs/qwen3_4b_dev.sqlite",
+    "tasks_path": "data/generated_sec_15_tasks.jsonl",
+    "tasks_sha256": "2fafa2fb75113e3d289d8d1b68f22446740697e7278c04c8fcd10f01266e5577"
+  },
+  "run": {
+    "already_done": 0,
+    "newly_graded": 100,
+    "requested_tasks": 100,
+    "skipped_existing": true
+  }
+}
