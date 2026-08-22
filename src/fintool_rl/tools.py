@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from .contracts import ToolCall
+from .contracts import RATIO_SCALE_BY_UNIT, ToolCall
 from .database import connect, metadata
 from .schema import SCHEMA_BY_NAME, ToolArgumentError, validate_arguments
 
@@ -342,6 +342,11 @@ class FinancialTools:
     ) -> dict[str, Any]:
         if output_unit not in {"ratio", "percent"}:
             raise ValueError("invalid_output_unit")
+        expected_scale = RATIO_SCALE_BY_UNIT[output_unit]
+        if scale != expected_scale:
+            raise ValueError(
+                f"scale_unit_mismatch: output_unit={output_unit} requires scale={expected_scale}"
+            )
         numerator, _, numerator_obs = self._scalar(numerator_observation_id)
         denominator, _, denominator_obs = self._scalar(denominator_observation_id)
         if math.isclose(denominator, 0.0):

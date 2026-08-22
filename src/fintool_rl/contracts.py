@@ -6,6 +6,14 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
 
+# A ratio is unitless; a percentage is expressed in percentage points. The
+# mapping is finite so scale is not an independent agent-chosen degree of
+# freedom.
+RATIO_SCALE_BY_UNIT: dict[str, float] = {"ratio": 1.0, "percent": 100.0}
+EXACT_SCALAR_TOLERANCE = 1e-6
+PERCENTAGE_TOLERANCE = 1e-4
+
+
 @dataclass(frozen=True)
 class ToolCall:
     name: str
@@ -77,4 +85,3 @@ class Trajectory:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-

@@ -9,6 +9,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .contracts import RATIO_SCALE_BY_UNIT
+from .metrics import CANONICAL_FINANCIAL_METRICS
+
 
 class ToolArgumentError(ValueError):
     """Arguments do not satisfy a declared tool contract."""
@@ -40,7 +43,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "symbol": _string("Canonical uppercase ticker."),
-                "metric": _string("Canonical financial metric."),
+                "metric": _string(
+                    "Canonical financial metric.",
+                    enum=list(CANONICAL_FINANCIAL_METRICS),
+                ),
                 "as_of_time": _string("Information cutoff in YYYY-MM-DD format."),
             },
             "required": ["symbol", "metric", "as_of_time"],
@@ -54,7 +60,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "symbol": _string("Canonical uppercase ticker."),
-                "metric": _string("Canonical metric such as revenue or net_income."),
+                "metric": _string(
+                    "Canonical financial metric.",
+                    enum=list(CANONICAL_FINANCIAL_METRICS),
+                ),
                 "fiscal_year": {"type": "integer", "minimum": 1900, "maximum": 2200},
                 "as_of_time": _string("Information cutoff in YYYY-MM-DD format."),
             },
@@ -160,16 +169,25 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "calculate_ratio",
         "family": "calculator",
-        "description": "Divide one scalar observation by another, multiply by scale, and label the unit.",
+        "description": (
+            "Divide one scalar observation by another. ratio uses scale 1.0; "
+            "percent uses scale 100.0."
+        ),
         "parameters": {
             "type": "object",
             "properties": {
                 "numerator_observation_id": _string("Observation containing the numerator."),
                 "denominator_observation_id": _string("Observation containing the denominator."),
-                "scale": {"type": "number", "default": 1.0},
+                "scale": {
+                    "type": "number",
+                    "enum": list(RATIO_SCALE_BY_UNIT.values()),
+                    "default": 1.0,
+                    "description": "Required scale: 1.0 for ratio or 100.0 for percent.",
+                },
                 "output_unit": _string(
                     "Unit label for the result: ratio or percent.",
                     pattern="^(ratio|percent)$",
+                    enum=list(RATIO_SCALE_BY_UNIT),
                     default="ratio",
                 ),
             },
@@ -239,6 +257,8 @@ def validate_arguments(tool_name: str, arguments: dict[str, Any]) -> None:
             )
         if "pattern" in spec and not re.fullmatch(spec["pattern"], value):
             raise ToolArgumentError(f"{tool_name}.{name}: does not match {spec['pattern']}")
+        if "enum" in spec and value not in spec["enum"]:
+            raise ToolArgumentError(f"{tool_name}.{name}: must be one of {spec['enum']}")
         if "minimum" in spec and value < spec["minimum"]:
             raise ToolArgumentError(f"{tool_name}.{name}: below minimum")
         if "maximum" in spec and value > spec["maximum"]:
@@ -250,10 +270,11 @@ def prompt_block() -> str:
     for schema in TOOL_SCHEMAS:
         params = schema["parameters"]
         required = set(params.get("required", []))
-        fields = ", ".join(
-            f"{name}: {spec['type']}{'' if name in required else ' (optional)'}"
-            for name, spec in params["properties"].items()
-        )
+        field_parts = []
+        for name, spec in params["properties"].items():
+            optional = "" if name in required else " (optional)"
+            enum = f" in {spec['enum']}" if "enum" in spec else ""
+            field_parts.append(f"{name}: {spec['type']}{enum}{optional}")
+        fields = ", ".join(field_parts)
         lines.append(f"- {schema['name']}({fields}) — {schema['description']}")
     return "\n".join(lines)
-

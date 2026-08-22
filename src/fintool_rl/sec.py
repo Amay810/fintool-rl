@@ -17,21 +17,12 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .database import SCHEMA_VERSION, connect, initialize_schema
+from .metrics import CANONICAL_METRIC_TAGS
 
 SEC_COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 SEC_TICKER_EXCHANGE_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 
-METRIC_TAGS: dict[str, tuple[str, ...]] = {
-    "revenue": (
-        "RevenueFromContractWithCustomerExcludingAssessedTax",
-        "Revenues",
-        "SalesRevenueNet",
-    ),
-    "gross_profit": ("GrossProfit",),
-    "net_income": ("NetIncomeLoss", "ProfitLoss"),
-    "total_assets": ("Assets",),
-    "total_liabilities": ("Liabilities",),
-}
+METRIC_TAGS = CANONICAL_METRIC_TAGS
 
 _QUARTER_FRAME = re.compile(r"^CY\d{4}Q[1-4]$")
 _CALENDAR_FRAME = re.compile(r"^CY(\d{4})$")

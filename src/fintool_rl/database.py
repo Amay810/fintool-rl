@@ -13,6 +13,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from .metrics import CANONICAL_FINANCIAL_METRICS
+
 SCHEMA_VERSION = "1"
 FIXTURE_SNAPSHOT_ID = "synthetic-us-equities-v1"
 FIXTURE_AS_OF = "2025-03-31"
@@ -134,7 +136,7 @@ def build_fixture_snapshot(path: Path | str, *, overwrite: bool = False) -> Path
                 2024: (535.0, 229.0, 104.0, 3720.0, 3015.0),
             },
         }
-        metric_names = ("revenue", "gross_profit", "net_income", "total_assets", "total_liabilities")
+        metric_names = CANONICAL_FINANCIAL_METRICS
         facts: list[tuple[Any, ...]] = []
         for symbol, years in base.items():
             for year, values in years.items():

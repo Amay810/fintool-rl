@@ -6,6 +6,7 @@ import pytest
 
 from fintool_rl.schema import SCHEMA_BY_NAME, TOOL_SCHEMAS, ToolArgumentError, prompt_block, validate_arguments
 from fintool_rl.tools import FinancialTools
+from fintool_rl.metrics import CANONICAL_FINANCIAL_METRICS
 
 
 def test_every_schema_has_exactly_one_implementation():
@@ -46,10 +47,21 @@ def test_strict_argument_validation():
         )
     with pytest.raises(ToolArgumentError):
         validate_arguments("unknown_tool", {})
+    with pytest.raises(ToolArgumentError):
+        validate_arguments(
+            "get_financial_fact",
+            {"symbol": "ALFA", "metric": "gross_margin", "fiscal_year": 2024, "as_of_time": "2025-03-31"},
+        )
 
 
 def test_prompt_contract_is_deterministic():
     assert prompt_block() == prompt_block()
     for name in SCHEMA_BY_NAME:
         assert name in prompt_block()
+    assert all(metric in prompt_block() for metric in CANONICAL_FINANCIAL_METRICS)
 
+
+def test_financial_metric_enum_is_public_and_shared():
+    for tool_name in ("list_available_periods", "get_financial_fact"):
+        metric_spec = SCHEMA_BY_NAME[tool_name]["parameters"]["properties"]["metric"]
+        assert tuple(metric_spec["enum"]) == CANONICAL_FINANCIAL_METRICS

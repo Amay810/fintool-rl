@@ -255,7 +255,7 @@ def test_build_sec_snapshot_from_local_json(tmp_path: Path):
     assert tasks
     assert all(task.split == "test" for task in tasks)
     assert all(task.metadata["fact_keys"] for task in tasks)
-    assert all(task.metadata["generator"] == "sec_snapshot_v1" for task in tasks)
+    assert all(task.metadata["generator"] == "sec_snapshot_v2" for task in tasks)
     assert all(
         step["arguments"].get("output_unit") == "percent"
         for task in tasks if task.template_family == "liabilities_to_assets"

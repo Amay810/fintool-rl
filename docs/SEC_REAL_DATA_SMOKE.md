@@ -78,13 +78,13 @@ rebuilt snapshot, tools, oracles, provenance, and reward integration; it is not 
 
 ## Engineering checks
 
-- 63 automated tests pass.
+- 81 automated tests pass, including the Gate A semantic-contract regressions.
 - Baseline harness records `invalid_action` / `model_call_error` without aborting the batch;
   reward hard failures respect `terminal_reason` so format errors are not collapsed into
   `execution_failure`.
 - Downloads validate JSON, retry transient failures with exponential backoff, and atomically replace files.
 - Snapshot reconstruction is deterministic at the byte hash level.
-- Generated task metadata identifies `sec_snapshot_v1`.
+- Generated task metadata identifies `sec_snapshot_v2` after the Gate A semantic-contract repair.
 - Fact-key leakage audits fail closed if a source fact appears in multiple splits.
 
 ## Remaining M1 work

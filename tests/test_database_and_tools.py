@@ -117,3 +117,21 @@ def test_ratio_output_unit_is_explicit(fixture_db: Path):
     )
     assert invalid["ok"] is False
     assert invalid["error"] == "invalid_arguments"
+
+
+def test_ratio_scale_must_match_output_unit(fixture_db: Path):
+    tools = FinancialTools(fixture_db)
+    liabilities = tools.call(
+        "get_financial_fact", symbol="ALFA", metric="total_liabilities", fiscal_year=2024,
+        as_of_time="2025-03-31",
+    )
+    assets = tools.call(
+        "get_financial_fact", symbol="ALFA", metric="total_assets", fiscal_year=2024,
+        as_of_time="2025-03-31",
+    )
+    kwargs = {
+        "numerator_observation_id": liabilities["provenance"]["observation_id"],
+        "denominator_observation_id": assets["provenance"]["observation_id"],
+    }
+    assert tools.call("calculate_ratio", **kwargs, scale=100.0, output_unit="ratio")["ok"] is False
+    assert tools.call("calculate_ratio", **kwargs, scale=1.0, output_unit="percent")["ok"] is False

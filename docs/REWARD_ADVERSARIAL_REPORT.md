@@ -1,5 +1,10 @@
 # Reward Adversarial Validation — Round 1 (expose only, no fixes)
 
+> Historical note: this report records the pre-Gate-A behavior of the
+> reward/tool contract. The `calculate_ratio` scale-forgery path described below
+> is now blocked by the unit-to-scale contract in `src/fintool_rl/contracts.py`
+> and `tools.py`; the original measurements remain historical evidence.
+
 | | |
 |---|---|
 | `REWARD_VERSION` | `m1-v2` |

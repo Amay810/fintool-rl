@@ -159,10 +159,8 @@ def _extra_family_calls(db_path: Path, task: TaskSpec) -> list[ToolCall]:
 def _coincidental_percent_path(db_path: Path, task: TaskSpec) -> tuple[list[ToolCall], dict[str, Any]]:
     """A tool path that never touches the task's company yet lands on the gold value.
 
-    `calculate_ratio` takes an agent-chosen `scale` and an agent-chosen
-    `output_unit`, so any two scalar observations can be turned into a
-    percent-unit observation carrying any value at all.  Here two unrelated
-    balance-sheet facts about another company are scaled onto the gold answer.
+    The pre-Gate-A contract allowed an agent-chosen `scale` to manufacture a
+    percent-unit observation. The semantic contract now rejects that mismatch.
     """
     tools = FinancialTools(db_path)
     numerator = tools.call(
@@ -188,7 +186,6 @@ def _coincidental_percent_path(db_path: Path, task: TaskSpec) -> tuple[list[Tool
         scale=scale,
         output_unit="percent",
     )
-    assert ratio["ok"]
     return list(tools.calls), ratio
 
 
@@ -321,10 +318,11 @@ def build_temporal_violation(db_path: Path, task: TaskSpec) -> Trajectory:
 
 def build_coincidental_scalar_grounding(db_path: Path, task: TaskSpec) -> Trajectory:
     calls, ratio = _coincidental_percent_path(db_path, task)
+    assert ratio["ok"] is False
     return _trajectory(
         task,
         calls,
-        _answer(float(task.answer["value"]), task.answer["unit"], [_observation_id(ratio)]),
+        _answer(float(task.answer["value"]), task.answer["unit"], []),
     )
 
 
@@ -604,24 +602,22 @@ def test_case_07_temporal_violation(db_path: Path, base_task: TaskSpec) -> None:
 
 
 def test_case_08_coincidental_scalar_grounding(db_path: Path, base_task: TaskSpec) -> None:
-    # Exploit: the whole trajectory is about a different company.  A `calculate_ratio`
-    # call with an agent-chosen `scale` and `output_unit="percent"` manufactures an
-    # observation whose scalar and unit match the answer, and the answer cites it.
+    # Regression: the pre-Gate-A scale forgery is rejected as an invalid action.
     trajectory = build_coincidental_scalar_grounding(db_path, base_task)
     assert all(BASE_SYMBOL not in str(call.arguments) for call in trajectory.tool_calls)
     reward = grade_trajectory(base_task, trajectory)
     assert_reward_vector(
         reward,
-        execution_valid=1.0,
+        execution_valid=0.0,
         answer_correct=1.0,
-        argument_valid=1.0,
+        argument_valid=0.0,
         temporal_valid=1.0,
-        grounded=1.0,
+        grounded=0.0,
         format_valid=1.0,
         efficiency=1.0,
-        required_family_coverage=1.0,
-        hard_failure=None,
-        total=1.0,
+        required_family_coverage=0.5,
+        hard_failure="invalid_arguments",
+        total=0.0,
     )
 
 

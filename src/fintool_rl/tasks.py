@@ -7,7 +7,11 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-from .contracts import TaskSpec
+from .contracts import (
+    EXACT_SCALAR_TOLERANCE,
+    PERCENTAGE_TOLERANCE,
+    TaskSpec,
+)
 from .database import connect
 from .oracle import execute_oracle
 from .tools import FinancialTools
@@ -37,7 +41,7 @@ def _build_task(
     oracle_steps: list[dict[str, Any]],
     required_tool_families: list[str],
     fact_keys: list[str],
-    answer_tolerance: float = 1e-6,
+    answer_tolerance: float = EXACT_SCALAR_TOLERANCE,
     split: str | None = None,
 ) -> TaskSpec:
     tools = FinancialTools(db_path)
@@ -141,7 +145,7 @@ def generate_fixture_tasks(db_path: Path | str) -> list[TaskSpec]:
                     oracle_steps=steps,
                     required_tool_families=["financial_statement", "calculator"],
                     fact_keys=[f"{symbol}:{metric}:{previous_year}", f"{symbol}:{metric}:{current_year}"],
-                    answer_tolerance=1e-4,
+                    answer_tolerance=PERCENTAGE_TOLERANCE,
                 ))
 
         for year in (2022, 2023, 2024):
@@ -179,7 +183,7 @@ def generate_fixture_tasks(db_path: Path | str) -> list[TaskSpec]:
                 oracle_steps=margin_steps,
                 required_tool_families=["financial_statement", "calculator"],
                 fact_keys=[f"{symbol}:gross_profit:{year}", f"{symbol}:revenue:{year}"],
-                answer_tolerance=1e-4,
+                answer_tolerance=PERCENTAGE_TOLERANCE,
             ))
 
             ratio_steps = [
@@ -218,7 +222,7 @@ def generate_fixture_tasks(db_path: Path | str) -> list[TaskSpec]:
                 oracle_steps=ratio_steps,
                 required_tool_families=["financial_statement", "calculator"],
                 fact_keys=[f"{symbol}:total_liabilities:{year}", f"{symbol}:total_assets:{year}"],
-                answer_tolerance=1e-4,
+                answer_tolerance=PERCENTAGE_TOLERANCE,
             )
             tasks.append(task)
 
@@ -252,7 +256,7 @@ def generate_fixture_tasks(db_path: Path | str) -> list[TaskSpec]:
             oracle_steps=price_steps,
             required_tool_families=["market_data", "calculator"],
             fact_keys=[f"{symbol}:price:2025-01-02", f"{symbol}:price:2025-01-08"],
-            answer_tolerance=1e-4,
+            answer_tolerance=PERCENTAGE_TOLERANCE,
         ))
     return sorted(tasks, key=lambda task: task.task_id)
 
@@ -347,7 +351,7 @@ def generate_snapshot_tasks(
                     ],
                     required_tool_families=["financial_statement", "calculator"],
                     fact_keys=[f"{symbol}:{metric}:{previous_year}", f"{symbol}:{metric}:{current_year}"],
-                    answer_tolerance=1e-4,
+                    answer_tolerance=PERCENTAGE_TOLERANCE,
                 ))
 
         margin_years = sorted(
@@ -360,7 +364,9 @@ def generate_snapshot_tasks(
                 db_path,
                 symbol=symbol,
                 split=split,
-                question=f"Calculate {symbol}'s gross margin for FY{year} using filings available by {as_of}.",
+                question=(
+                    f"Calculate {symbol}'s gross margin for FY{year} using filings available by {as_of}."
+                ),
                 as_of_time=as_of,
                 difficulty="multi_tool",
                 template_family="gross_margin",
@@ -389,7 +395,7 @@ def generate_snapshot_tasks(
                 ],
                 required_tool_families=["financial_statement", "calculator"],
                 fact_keys=[f"{symbol}:gross_profit:{year}", f"{symbol}:revenue:{year}"],
-                answer_tolerance=1e-4,
+                answer_tolerance=PERCENTAGE_TOLERANCE,
             ))
 
         ratio_years = sorted(
@@ -402,7 +408,9 @@ def generate_snapshot_tasks(
                 db_path,
                 symbol=symbol,
                 split=split,
-                question=f"What was {symbol}'s liabilities-to-assets percentage for FY{year} as of {as_of}?",
+                question=(
+                    f"What was {symbol}'s liabilities-to-assets percentage for FY{year} as of {as_of}?"
+                ),
                 as_of_time=as_of,
                 difficulty="compositional",
                 template_family="liabilities_to_assets",
@@ -433,10 +441,10 @@ def generate_snapshot_tasks(
                 ],
                 required_tool_families=["financial_statement", "calculator"],
                 fact_keys=[f"{symbol}:total_liabilities:{year}", f"{symbol}:total_assets:{year}"],
-                answer_tolerance=1e-4,
+                answer_tolerance=PERCENTAGE_TOLERANCE,
             ))
     for task in tasks:
-        task.metadata["generator"] = "sec_snapshot_v1"
+        task.metadata["generator"] = "sec_snapshot_v2"
     tasks.sort(key=lambda task: task.task_id)
     assert_no_fact_leakage(tasks)
     return tasks
