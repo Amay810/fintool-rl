@@ -6,6 +6,7 @@ import argparse
 import json
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from .baseline_report import (
     build_baseline_records,
@@ -13,12 +14,14 @@ from .baseline_report import (
     write_failure_table,
     write_report,
 )
-from .database import build_fixture_snapshot, snapshot_manifest, write_manifest
+from .database import build_fixture_snapshot, file_sha256, snapshot_manifest, write_manifest
 from .evalset import (
     DEFAULT_MANIFEST_PATH,
     build_evalset_manifest,
+    verify_evalset_file,
     write_evalset_manifest,
 )
+from .gate_b import build_reachability_report, require_gate_b_settings
 from .harness import HarnessRunner, OraclePolicy, TrajectoryStore
 from .policies import OpenAICompatiblePolicy
 from .sec import (
@@ -225,6 +228,112 @@ def generate_tasks(args: argparse.Namespace) -> None:
     }, indent=2, sort_keys=True))
 
 
+def check_runtime(args: argparse.Namespace) -> None:
+    data_root = Path(args.data_root)
+    report: dict[str, Any] = {"data_root": str(data_root), "checks": []}
+
+    def record(name: str, ok: bool, **detail: object) -> None:
+        report["checks"].append({"name": name, "ok": ok, **detail})
+
+    if not str(data_root.resolve()).startswith("/root/autodl-tmp"):
+        record("data_root_on_data_disk", False, detail=str(data_root))
+    else:
+        record("data_root_on_data_disk", True)
+
+    db = Path(args.db)
+    record("snapshot_exists", db.is_file(), path=str(db))
+    if db.is_file():
+        digest = file_sha256(db)
+        expected = snapshot_manifest(db).get("sha256")
+        record("snapshot_sha256", digest == expected, sha256=digest, expected=expected)
+
+    tasks = load_tasks(args.tasks)
+    record("tasks_loaded", bool(tasks), n=len(tasks))
+    verification = verify_evalset_file(tasks, args.evalset_manifest)
+    record("evalset_verified", bool(verification.get("verified")), **verification)
+
+    model_dir = Path(args.model_dir)
+    weight_files = list(model_dir.glob("*.safetensors")) + list(model_dir.glob("*.bin"))
+    record(
+        "model_weights_present",
+        model_dir.is_dir() and bool(weight_files),
+        path=str(model_dir),
+        n_weight_files=len(weight_files),
+    )
+    tokenizer_ok = (model_dir / "tokenizer.json").is_file() or (model_dir / "tokenizer_config.json").is_file()
+    record("tokenizer_files_present", tokenizer_ok, path=str(model_dir))
+
+    if args.load_tokenizer:
+        try:
+            from transformers import AutoTokenizer
+
+            tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=True)
+            encoded = tokenizer("Gate B runtime check")
+            record("tokenizer_loads", True, n_tokens=len(encoded["input_ids"]))
+        except Exception as exc:  # import or 2GiB OOM must be named, not hidden
+            record("tokenizer_loads", False, error=type(exc).__name__, detail=str(exc)[:300])
+
+    skip_fail = set()
+    if not args.require_model:
+        skip_fail.update({"model_weights_present", "tokenizer_files_present", "tokenizer_loads"})
+    failed = [row["name"] for row in report["checks"] if not row["ok"] and row["name"] not in skip_fail]
+    report["ok"] = not failed
+    report["failed"] = failed
+    print(json.dumps(report, indent=2, sort_keys=True))
+    if failed:
+        raise SystemExit(f"runtime checks failed: {failed}")
+
+
+def probe_reachability(args: argparse.Namespace) -> None:
+    require_gate_b_settings(temperature=args.temperature, k=args.k)
+    tasks = _filter_tasks(args)
+    store = TrajectoryStore(args.store)
+    existing = [trajectory for trajectory, _ in store.load_graded()]
+    done_counts: dict[str, int] = {}
+    for trajectory in existing:
+        done_counts[trajectory.task_id] = done_counts.get(trajectory.task_id, 0) + 1
+
+    policy = OpenAICompatiblePolicy.from_env(temperature=args.temperature)
+    runner = HarnessRunner(args.db, max_steps=args.max_steps)
+    newly_graded = 0
+    for task in tasks:
+        already = done_counts.get(task.task_id, 0)
+        for _ in range(max(0, args.k - already)):
+            trajectory, reward = runner.run(task, policy)
+            store.save(trajectory, reward)
+            newly_graded += 1
+
+    selected_ids = {task.task_id for task in tasks}
+    graded = [
+        (trajectory, reward)
+        for trajectory, reward in store.load_graded()
+        if trajectory.task_id in selected_ids
+    ]
+    report = build_reachability_report(
+        graded,
+        temperature=args.temperature,
+        k=args.k,
+        policy_name=policy.name,
+    )
+    report["run"] = {
+        "requested_tasks": len(tasks),
+        "newly_graded": newly_graded,
+        "store": str(args.store),
+    }
+    if args.report:
+        write_report(report, args.report)
+    print(json.dumps({
+        "gate": report["gate"],
+        "n_tasks": report["n_tasks"],
+        "n_trajectories": report["n_trajectories"],
+        "pass_at_k": report["pass_at_k"],
+        "mean_trajectory_diversity": report["mean_trajectory_diversity"],
+        "mean_calculator_called_rate": report["mean_calculator_called_rate"],
+        "mean_reward_variance": report["mean_reward_variance"],
+        "report": args.report or None,
+    }, indent=2, sort_keys=True))
+
+
 def freeze_evalset(args: argparse.Namespace) -> None:
     output = Path(args.output)
     if output.exists() and not args.overwrite:
@@ -362,6 +471,31 @@ def build_parser() -> argparse.ArgumentParser:
     freeze.add_argument("--output", default=str(DEFAULT_MANIFEST_PATH))
     freeze.add_argument("--overwrite", action="store_true")
     freeze.set_defaults(func=freeze_evalset)
+
+    runtime = subparsers.add_parser("check-runtime", help="CPU-only AutoDL path and artifact checks.")
+    runtime.add_argument("--data-root", default="/root/autodl-tmp")
+    runtime.add_argument("--db", default="data/sec_snapshot_15.sqlite")
+    runtime.add_argument("--tasks", default="data/generated_sec_15_tasks.jsonl")
+    runtime.add_argument("--model-dir", default="/root/autodl-tmp/models/Qwen3-4B-Instruct-2507")
+    runtime.add_argument("--load-tokenizer", action="store_true")
+    runtime.add_argument("--require-model", action=argparse.BooleanOptionalAction, default=True)
+    _add_evalset_arguments(runtime)
+    runtime.set_defaults(func=check_runtime)
+
+    probe = subparsers.add_parser("probe-reachability", help="Gate B: K-sample stochastic reachability.")
+    probe.add_argument("--db", default="data/sec_snapshot_15.sqlite")
+    probe.add_argument("--tasks", default="data/generated_sec_15_tasks.jsonl")
+    probe.add_argument("--store", default="/root/autodl-tmp/runs/gate_b/store.sqlite")
+    probe.add_argument("--report", default="/root/autodl-tmp/runs/gate_b/report.json")
+    probe.add_argument("--split", choices=["train", "dev", "test", "challenge"], default="dev")
+    probe.add_argument("--template-family", default="")
+    probe.add_argument("--difficulty", choices=["single_tool", "multi_tool", "compositional", "held_out_tool"], default="")
+    probe.add_argument("--limit", type=int, default=20)
+    probe.add_argument("--max-steps", type=int, default=8)
+    probe.add_argument("--k", type=int, default=4)
+    probe.add_argument("--temperature", type=float, default=0.7)
+    _add_evalset_arguments(probe)
+    probe.set_defaults(func=probe_reachability)
     return parser
 
 

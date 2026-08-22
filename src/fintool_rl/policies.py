@@ -132,11 +132,14 @@ class OpenAICompatiblePolicy(JsonActionPolicy):
         super().__init__(self._complete, name=f"OpenAICompatiblePolicy:{model}")
 
     @classmethod
-    def from_env(cls) -> "OpenAICompatiblePolicy":
+    def from_env(cls, *, temperature: float | None = None) -> "OpenAICompatiblePolicy":
+        if temperature is None:
+            temperature = float(os.environ.get("FINTOOL_LLM_TEMPERATURE", "0.0"))
         return cls(
             base_url=os.environ.get("FINTOOL_LLM_BASE_URL", "http://127.0.0.1:8000/v1"),
             model=os.environ.get("FINTOOL_LLM_MODEL", "Qwen3-1.7B"),
             api_key=os.environ.get("FINTOOL_LLM_API_KEY", ""),
+            temperature=temperature,
         )
 
     def _complete(self, messages: list[dict[str, str]]) -> str:
